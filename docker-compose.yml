@@ -1,0 +1,125 @@
+# ============================================================
+# Docker Compose 编排
+# 来源：Q1「RAGFlow Docker化私有化部署」+ Q20「Milvus单机版」
+# ============================================================
+
+version: "3.8"
+
+services:
+  # ---- Milvus 向量数据库 (Q20: 单机版) ----
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    network_mode: host
+
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ./volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    network_mode: host
+
+  milvus:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.4.3
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: localhost:2379
+      MINIO_ADDRESS: localhost:9000
+    volumes:
+      - ./volumes/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"   # Milvus gRPC
+      - "9091:9091"     # Milvus 健康检查
+    depends_on:
+      - etcd
+      - minio
+    network_mode: host
+
+  # ---- RAG 服务 (可选Docker化运行) ----
+  medical-rag-api:
+    build: .
+    container_name: medical-rag-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - QWEN_MODEL_PATH=/models/Qwen-14B-Chat-GPTQ-Int4
+      - BGE_MODEL_PATH=/models/bge-m3
+    volumes:
+      - ./models:/models:ro          # 模型权重 (只读)
+      - ./data:/app/data:ro          # 知识库数据
+      - ./logs:/app/logs
+      - ./prompts:/app/prompts:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      uvicorn src.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 1
+    depends_on:
+      milvus:
+        condition: service_healthy
+
+  # ---- Baseline RAG 服务 (Q15: 对照实验) ----
+  baseline-rag:
+    build: .
+    container_name: baseline-rag
+    ports:
+      - "8001:8001"
+    environment:
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - BGE_MODEL_PATH=/models/bge-m3
+    volumes:
+      - ./models:/models:ro
+      - ./data:/app/data:ro
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      python scripts/run_baseline.py
+    depends_on:
+      milvus:
+        condition: service_healthy

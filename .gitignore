@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+
+# Runtime data
+milvus_lite/
+logs/
+models/
+volumes/
+
+# Generated data
+data/pubmed_library/
+data/medical_kb_library/
+data/pubmed_merged/
+data/pubmed_txt/
+data/pubmed_upload/
+data/medical_kb/
+data/pubmed/
+
+# OS
+.DS_Store
+Thumbs.db

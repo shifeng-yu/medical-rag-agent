@@ -1,0 +1,39 @@
+# ============================================================
+# 全科医疗问诊RAG智能助手 - Python 依赖
+# 来源：简历技术栈 Q10 GPTQ INT4 / Q20 Milvus / Q25 LlamaIndex(仅baseline)
+# ============================================================
+
+# --- Web 框架 (简历: FastAPI) ---
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.0
+pydantic-settings==2.2.0
+
+# --- 向量数据库 (Q20: Milvus 单机版) ---
+pymilvus==2.4.3
+
+# --- 深度学习 & 模型推理 (Q10: GPTQ INT4量化) ---
+torch==2.2.2
+transformers==4.40.0
+auto-gptq==0.7.1
+sentence-transformers==2.7.0
+accelerate==0.30.0
+
+# --- 文档处理 ---
+PyPDF2==3.0.1
+python-docx==1.1.0
+markdown==3.6
+
+# --- 工具库 ---
+numpy==1.26.4
+pandas==2.2.2
+python-multipart==0.0.9
+httpx==0.27.0
+loguru==0.7.2
+python-dotenv==1.0.1
+tiktoken==0.7.0
+
+# --- LlamaIndex (仅用于 baseline 原型对比, Q25) ---
+llama-index==0.10.37
+llama-index-vector-stores-milvus==0.1.0
+llama-index-embeddings-huggingface==0.2.0
