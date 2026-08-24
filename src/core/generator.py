@@ -1,7 +1,6 @@
 # ============================================================
 # 答案生成模块（CPU/GPU自适应）
-# 来源：项目需求
-# GPU: GPTQ INT4 量化 (项目需求)
+# GPU: GPTQ INT4 量化 
 # CPU: 标准transformers加载 (当前机器适配)
 # ============================================================
 
@@ -28,7 +27,7 @@ def classify_with_llm(prompt: str, max_tokens: int = 10) -> str:
 
 
 class AnswerGenerator:
-    """医疗问诊回答生成器 (项目需求)"""
+    """医疗问诊回答生成器 """
 
     def generate(
         self,

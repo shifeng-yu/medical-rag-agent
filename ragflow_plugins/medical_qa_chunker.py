@@ -1,11 +1,10 @@
 # ============================================================
 # RAGFlow 自定义分块插件
-# 来源：Q22「通过编写自定义 Python 分块解析函数，注册到RAGFlow的分块策略」
 # 将本模块注册到 RAGFlow 的分块解析器扩展点
 # ============================================================
 
 """
-RAGFlow 自定义分块插件注册指南 (项目需求)
+RAGFlow 自定义分块插件注册指南 
 
 RAGFlow 的文档解析模块支持可插拔扩展，通过编写自定义分块解析函数并注册实现。
 
@@ -30,7 +29,7 @@ from src.chunking.medical_qa_chunker import MedicalQAChunker
 
 class RAGFlowMedicalQAChunker:
     """
-    RAGFlow 可插拔自定义分块解析器 (项目需求)
+    RAGFlow 可插拔自定义分块解析器 
     符合 RAGFlow 分块解析器扩展接口规范
     """
 

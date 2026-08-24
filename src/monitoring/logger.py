@@ -1,6 +1,5 @@
 # ============================================================
 # 轻量日志监控模块
-# 来源：「每次请求记录核心指标：query、检索耗时、推理耗时、
 #       成功率、Judge打分、输出结果，定期统计」
 # ============================================================
 
@@ -52,7 +51,7 @@ class RequestMetrics:
 
 class RequestLogger:
     """
-    轻量日志监控 (项目需求)
+    轻量日志监控 
     - 每次请求记录核心指标
     - 定期统计输出平均响应时间/成功率/校验通过率
     """
@@ -75,7 +74,7 @@ class RequestLogger:
         logger.info(f"日志监控已初始化，日志目录: {self.log_dir}")
 
     def log_request(self, metrics: RequestMetrics):
-        """记录单次请求指标 (项目需求)"""
+        """记录单次请求指标 """
         record = metrics.to_dict()
 
         with self._lock:

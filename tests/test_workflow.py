@@ -1,6 +1,5 @@
 # ============================================================
 # 核心流程集成测试
-# 来源：项目需求
 # 注：完整200条样本需医院脱敏数据，此处提供测试框架+示例
 # ============================================================
 
@@ -16,7 +15,7 @@ from config.settings import settings
 # ---- 单元测试 ----
 
 class TestClassifier:
-    """问题分类测试 (项目需求)"""
+    """问题分类测试 """
 
     def test_common_disease_routes_to_local(self):
         """常见病 → 本地库"""
@@ -31,7 +30,7 @@ class TestClassifier:
         assert result in ("pubmed", "both")
 
     def test_high_judge_triggers_on_diagnosis(self):
-        """诊断类问题触发高等级校验 (项目需求)"""
+        """诊断类问题触发高等级校验 """
         from src.core.classifier import classifier
         assert classifier.should_trigger_high_judge("我这是不是糖尿病")
 
@@ -42,7 +41,7 @@ class TestClassifier:
 
 
 class TestMedicalQAChunker:
-    """Q&A分块测试 (项目需求)"""
+    """Q&A分块测试 """
 
     def test_medical_boundary_detection(self):
         """测试医疗边界识别"""
@@ -63,7 +62,7 @@ class TestMedicalQAChunker:
             assert len(chunk.text) > 0
 
     def test_long_qa_secondary_split(self):
-        """超长QA二级拆分 (项目需求)"""
+        """超长QA二级拆分 """
         from src.chunking.medical_qa_chunker import MedicalQAChunker
 
         chunker = MedicalQAChunker(max_tokens=100)
@@ -76,14 +75,14 @@ class TestMedicalQAChunker:
         chunks = chunker.chunk(long_qa)
         # 超长文本应该被拆分为多个块
         assert len(chunks) >= 1
-        # 每个子块应带问题前缀 (项目需求)
+        # 每个子块应带问题前缀 
         for chunk in chunks:
             if chunk.source_prefix:
                 assert len(chunk.source_prefix) > 0
 
 
 class TestHallucinationJudge:
-    """幻觉校验测试 (项目需求)"""
+    """幻觉校验测试 """
 
     def test_rule_catches_unverified_entity(self):
         """规则校验: 检测未溯源医疗实体"""
@@ -136,7 +135,7 @@ class TestHallucinationJudge:
 
 
 class TestSessionManager:
-    """会话管理测试 (项目需求)"""
+    """会话管理测试 """
 
     def test_session_creation(self):
         """创建新会话"""
@@ -147,7 +146,7 @@ class TestSessionManager:
         assert len(sid) > 0
 
     def test_independent_session_storage(self):
-        """独立会话隔离 (项目需求)"""
+        """独立会话隔离 """
         from src.session.manager import session_manager
 
         sid1 = session_manager.get_or_create_session()
@@ -162,7 +161,7 @@ class TestSessionManager:
         assert history1 != history2  # 不同用户缓存完全隔离
 
     def test_context_compression_trigger(self):
-        """上下文压缩触发 (项目需求)"""
+        """上下文压缩触发 """
         from src.session.manager import session_manager
 
         sid = session_manager.get_or_create_session()
@@ -172,11 +171,11 @@ class TestSessionManager:
             session_manager.add_message(sid, "assistant", f"建议休息{i}")
 
         context, tokens = session_manager.build_context(sid, "我还是头疼")
-        # 应该包含"历史对话摘要" (项目需求)
+        # 应该包含"历史对话摘要" 
         assert "历史对话摘要" in context or "摘要" in context or tokens > 0
 
 
-# ---- 幻觉率计算工具 (项目需求) ----
+# ---- 幻觉率计算工具  ----
 
 
 def compute_hallucination_rate(
@@ -185,7 +184,7 @@ def compute_hallucination_rate(
     use_judge: bool = False,
 ) -> dict:
     """
-    计算幻觉率 (项目需求)
+    计算幻觉率 
     200条标准测试集统计
     """
     import requests

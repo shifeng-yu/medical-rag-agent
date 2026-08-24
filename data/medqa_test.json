@@ -1,0 +1,182 @@
+[
+  {
+    "question": "冠心病人能运动吗？",
+    "answer": "中等强度有氧运动",
+    "source": "中国冠心病康复指南",
+    "type": "local"
+  },
+  {
+    "question": "心房颤动需要抗凝吗？",
+    "answer": "CHA2DS2-VASc评分",
+    "source": "中国房颤诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "心脏彩超能查出什么？",
+    "answer": "射血分数",
+    "source": "中国超声心动图检查规范",
+    "type": "local"
+  },
+  {
+    "question": "哮喘患者日常需要注意什么？",
+    "answer": "吸入性糖皮质激素",
+    "source": "中国支气管哮喘防治指南",
+    "type": "local"
+  },
+  {
+    "question": "咳嗽一个月了还不好怎么回事？",
+    "answer": "慢性咳嗽",
+    "source": "中国咳嗽诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "糖尿病血糖控制目标是多少？",
+    "answer": "HbA1c小于7%",
+    "source": "中国2型糖尿病防治指南",
+    "type": "local"
+  },
+  {
+    "question": "痛风发作时怎么快速止痛？",
+    "answer": "非甾体抗炎药",
+    "source": "中国痛风诊疗指南",
+    "type": "local"
+  },
+  {
+    "question": "桥本甲状腺炎需要治疗吗？",
+    "answer": "左甲状腺素钠",
+    "source": "中国甲状腺疾病诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "甲亢能根治吗？",
+    "answer": "放射性碘131治疗",
+    "source": "中国甲亢诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "胃疼怎么办？",
+    "answer": "胃镜检查",
+    "source": "中国慢性胃炎诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "肠易激综合征怎么治？",
+    "answer": "低FODMAP饮食",
+    "source": "中国IBS诊治共识",
+    "type": "local"
+  },
+  {
+    "question": "脂肪肝能逆转吗？",
+    "answer": "减轻体重5-10%",
+    "source": "中国脂肪肝防治指南",
+    "type": "local"
+  },
+  {
+    "question": "稳定期冠心病患者每周运动量建议多少？",
+    "answer": "150分钟",
+    "source": "中国冠心病康复指南",
+    "type": "local"
+  },
+  {
+    "question": "房颤抗凝期间需要评估什么风险？",
+    "answer": "出血风险",
+    "source": "中国房颤诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "慢性咳嗽的常见原因有哪些？",
+    "answer": "咳嗽变异性哮喘",
+    "source": "中国咳嗽诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "2型糖尿病老年患者血糖目标如何调整？",
+    "answer": "适当放宽",
+    "source": "中国2型糖尿病防治指南",
+    "type": "local"
+  },
+  {
+    "question": "痛风发作期是否应开始降尿酸治疗？",
+    "answer": "不宜开始",
+    "source": "中国痛风诊疗指南",
+    "type": "local"
+  },
+  {
+    "question": "胃痛时如何初步判断原因？",
+    "answer": "十二指肠溃疡",
+    "source": "中国慢性胃炎诊治指南",
+    "type": "local"
+  },
+  {
+    "question": "室性心动过速的最新治疗研究进展？",
+    "answer": "ARBs",
+    "source": "PubMed Cardiology 2023",
+    "type": "pubmed"
+  },
+  {
+    "question": "射血分数保留心衰的治疗新选择？",
+    "answer": "CCBs",
+    "source": "PubMed Cardiology 2025",
+    "type": "pubmed"
+  },
+  {
+    "question": "乳腺癌靶向治疗的最新研究？",
+    "answer": "Trastuzumab",
+    "source": "PubMed Oncology",
+    "type": "pubmed"
+  },
+  {
+    "question": "帕金森病的药物治疗新进展？",
+    "answer": "Antiepileptic Drugs",
+    "source": "PubMed Neurology",
+    "type": "pubmed"
+  },
+  {
+    "question": "脓毒症的抗菌治疗研究？",
+    "answer": "Oseltamivir",
+    "source": "PubMed Infectious Disease",
+    "type": "pubmed"
+  },
+  {
+    "question": "双相障碍的新型药物研究？",
+    "answer": "Brexpiprazole",
+    "source": "PubMed Psychiatry",
+    "type": "pubmed"
+  },
+  {
+    "question": "偏头痛的前瞻性治疗研究？",
+    "answer": "Dopamine Agonists",
+    "source": "PubMed Neurology",
+    "type": "pubmed"
+  },
+  {
+    "question": "结直肠癌的新辅助化疗研究？",
+    "answer": "R-CHOP",
+    "source": "PubMed Oncology",
+    "type": "pubmed"
+  },
+  {
+    "question": "疟疾的最新抗疟疾药物研究？",
+    "answer": "Artemisinin",
+    "source": "PubMed Infectious Disease",
+    "type": "pubmed"
+  },
+  {
+    "question": "创伤后应激障碍的药物治疗系统综述？",
+    "answer": "Methylphenidate",
+    "source": "PubMed Psychiatry",
+    "type": "pubmed"
+  },
+  {
+    "question": "非小细胞肺癌的真实世界靶向治疗证据？",
+    "answer": "Trastuzumab",
+    "source": "PubMed Oncology",
+    "type": "pubmed"
+  },
+  {
+    "question": "COVID-19 的真实世界治疗研究？",
+    "answer": "Ceftriaxone",
+    "source": "PubMed Infectious Disease",
+    "type": "pubmed"
+  }
+]

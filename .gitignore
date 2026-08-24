@@ -16,6 +16,7 @@ venv/
 
 # Environment
 .env
+.workbuddy/
 
 # Runtime data
 milvus_lite/

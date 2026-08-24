@@ -1,6 +1,5 @@
 # ============================================================
 # LLM-Judge 幻觉校验模块 (双层)
-# 来源：项目需求
 # 第一层: 规则校验 (医疗实体可溯源/违规内容/来源标注)
 # 第二层: 模型交叉校验 (三维打分: 事实一致性/逻辑合理性/回答有用性)
 # 流程: 规则校验 → 模型校验 → 均通过才输出
@@ -21,7 +20,7 @@ from src.utils.helpers import (
 
 class HallucinationJudge:
     """
-    幻觉防控两层校验机制 (项目需求)
+    幻觉防控两层校验机制
     - 规则层: 硬红线拦截 (编造实体/越权诊断/处方推荐)
     - 模型层: 三维打分 (事实一致性/逻辑合理性/回答有用性), 均>6分通过
     """
@@ -32,13 +31,13 @@ class HallucinationJudge:
             f"LLM-Judge 已初始化 (分数阈值={self.score_threshold})"
         )
 
-    # ==================== 第一层: 规则校验 (项目需求) ====================
+    # ==================== 第一层: 规则校验  ====================
 
     def rule_check(
         self, answer: str, retrieved_contexts: List[Dict]
     ) -> Tuple[bool, str, Dict]:
         """
-        规则层硬红线检查 (项目需求)
+        规则层硬红线检查 
         三条规则:
         1. 医疗实体可溯源: 所有药品名/疾病名必须在检索上下文中能找到
         2. 违规内容拦截: 不能有确诊结论/处方推荐
@@ -47,7 +46,7 @@ class HallucinationJudge:
         """
         details = {}
 
-        # 检查1: 医疗实体可溯源 (项目需求)
+        # 检查1: 医疗实体可溯源 
         entities = extract_medical_entities(answer)
         context_text = " ".join(c.get("content", "") for c in retrieved_contexts)
 
@@ -83,7 +82,7 @@ class HallucinationJudge:
 
     def _check_violations(self, answer: str) -> List[str]:
         """
-        检查违规医疗内容 (项目需求)
+        检查违规医疗内容 
         - 直接下确诊结论
         - 推荐处方药
         - 其他医疗合规红线
@@ -91,7 +90,7 @@ class HallucinationJudge:
         """
         violations = []
 
-        # 越权诊断模式 (项目需求)
+        # 越权诊断模式 
         diagnosis_patterns = [
             re.compile(r"你(?:得了|患有?|得的是?|确诊为|肯定是?|绝对是?)\s*\S{2,10}(?:病|症|炎|癌)"),
             re.compile(r"(?:明确|肯定|绝对|一定)(?:是|患有?)\s*\S{2,10}(?:病|症|炎)"),
@@ -103,7 +102,7 @@ class HallucinationJudge:
                 violations.append("越权给出确定诊断结论")
                 break
 
-        # 处方推荐模式 (项目需求)
+        # 处方推荐模式 
         prescription_patterns = [
             re.compile(r"(?:建议|推荐)(?:服用?|使用|购买)\s*\S{2,8}(?:片|胶囊|颗粒|口服液|注射液|丸|散|膏|丹|剂)"),
             re.compile(r"开(?:了?)?处方[：:]*[一-鿿a-zA-Z0-9]"),
@@ -117,7 +116,7 @@ class HallucinationJudge:
 
         return violations
 
-    # ==================== 第二层: 模型交叉校验 (项目需求) ====================
+    # ==================== 第二层: 模型交叉校验  ====================
 
     def llm_judge(
         self,
@@ -126,7 +125,7 @@ class HallucinationJudge:
         retrieved_contexts: List[Dict],
     ) -> Tuple[bool, Dict[str, float], str]:
         """
-        LLM-Judge 三维打分 (项目需求)
+        LLM-Judge 三维打分 
         维度:
         1. 事实一致性 (factual_consistency): 回答是否基于检索上下文，有无编造
         2. 逻辑合理性 (logical_coherence): 回答逻辑是否通顺，有无矛盾
@@ -206,7 +205,7 @@ class HallucinationJudge:
                 "answer_helpfulness": 5,
             }, f"校验异常: {e}"
 
-    # ==================== 完整校验流程 (项目需求) ====================
+    # ==================== 完整校验流程  ====================
 
     def validate(
         self,
@@ -216,10 +215,10 @@ class HallucinationJudge:
         trigger_high_judge: bool = True,
     ) -> Tuple[bool, Dict, str]:
         """
-        完整两层校验流程 (项目需求)
+        完整两层校验流程 
         返回: (最终通过, 校验详情, 反馈信息)
         """
-        # 第一层: 规则校验 (项目需求)
+        # 第一层: 规则校验 
         rule_passed, rule_reason, rule_details = self.rule_check(
             answer, retrieved_contexts
         )
@@ -230,7 +229,7 @@ class HallucinationJudge:
                 "details": rule_details,
             }, rule_reason
 
-        # 第二层: 模型交叉校验 (项目需求)
+        # 第二层: 模型交叉校验 
         # 涉及核心医疗问题才触发LLM-Judge，普通咨询可跳过
         if not trigger_high_judge:
             logger.info("[LLM-Judge] 跳过模型校验（非高风险问题）")

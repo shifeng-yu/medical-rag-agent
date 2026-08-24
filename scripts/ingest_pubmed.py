@@ -1,6 +1,5 @@
 # ============================================================
 # PubMed 离线文献导入脚本
-# 来源：Q6「PubMed官方批量下载接口, 近5年核心期刊, 30万条」
 # ============================================================
 
 import sys
@@ -19,7 +18,6 @@ from src.chunking.medical_qa_chunker import MedicalQAChunker
 def parse_pubmed_json(file_path: Path) -> Optional[Dict]:
     """
     解析 PubMed JSON 格式文献 (NCBI E-utilities 返回格式)
-    来源: Q6「通过PubMed官方批量下载接口同步」
     """
     try:
         data = json.loads(file_path.read_text(encoding="utf-8"))
@@ -99,9 +97,8 @@ def download_pubmed_batch(
     retstart: int = 0,
 ):
     """
-    PubMed 批量下载 (项目需求)
+    PubMed 批量下载 
     使用 NCBI E-utilities API
-    来源: Q6「通过PubMed官方批量下载接口，同步近5年核心期刊文献摘要」
     """
     import urllib.request
     import urllib.parse
@@ -244,7 +241,7 @@ def main():
         logger.warning("未找到 PubMed 文献，生成示例数据...")
         documents = _generate_sample_pubmed()
 
-    # Q&A 分块 (项目需求)
+    # Q&A 分块 
     chunker = MedicalQAChunker()
     chunks = chunker.batch_chunk(documents)
     logger.info(f"PubMed分块完成: {len(documents)} 文档 → {len(chunks)} 块")

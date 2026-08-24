@@ -1,6 +1,5 @@
 # ============================================================
 # 全科医疗问诊RAG智能助手 - 全局配置
-# 来源：简历技术栈 + Q2-Q25 各项参数设置
 # ============================================================
 
 import os
@@ -14,7 +13,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 
 class Settings(BaseSettings):
-    """全局配置，所有值均对应问答文档中的明确参数"""
+    """全局配置：模型路径、向量库连接、阈值参数"""
 
     # ========== 模型路径 ( GPTQ INT4量化) ==========
     qwen_model_path: str = os.getenv("QWEN_MODEL_PATH", "/models/Qwen-14B-Chat-GPTQ-Int4")
@@ -31,7 +30,7 @@ class Settings(BaseSettings):
     milvus_port: int = int(os.getenv("MILVUS_PORT", "19530"))
     milvus_collection_kb: str = os.getenv("MILVUS_COLLECTION_KB", "medical_knowledge_base")
     milvus_collection_pubmed: str = os.getenv("MILVUS_COLLECTION_PUBMED", "pubmed_literature")
-    embedding_dim: int = 1024  # BGE-M3 向量维度 (项目需求)
+    embedding_dim: int = 1024  # BGE-M3 向量维度 
 
     # ========== 服务配置 ==========
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
@@ -39,12 +38,12 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     log_dir: str = os.getenv("LOG_DIR", str(PROJECT_ROOT / "logs"))
 
-    # ========== 会话配置 (项目需求) ==========
+    # ========== 会话配置  ==========
     session_ttl_seconds: int = int(os.getenv("SESSION_TTL_SECONDS", "86400"))  # 24h
     session_max_tokens: int = int(os.getenv("SESSION_MAX_TOKENS", "2000"))     # 触发压缩阈值
     session_compress_rounds: int = int(os.getenv("SESSION_COMPRESS_ROUNDS", "4"))  # >4轮压缩
 
-    # ========== 检索配置 (项目需求) ==========
+    # ========== 检索配置  ==========
     retrieval_top_k: int = int(os.getenv("RETRIEVAL_TOP_K", "10"))
     rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
 
@@ -53,7 +52,7 @@ class Settings(BaseSettings):
     chunk_min_tokens: int = 100   #  最小token阈值
     chunk_overlap_tokens: int = 50
 
-    # ========== 重试与降级 (项目需求) ==========
+    # ========== 重试与降级  ==========
     max_retry_generation: int = int(os.getenv("MAX_RETRY_GENERATION", "2"))   #  最多重试2次
     max_retry_tool_call: int = int(os.getenv("MAX_RETRY_TOOL_CALL", "2"))     #  工具调用重试2次
 

@@ -1,6 +1,5 @@
 # ============================================================
 # 工具函数模块
-# 来源：项目需求
 # ============================================================
 
 import re
@@ -16,7 +15,7 @@ _tokenizer = None
 
 
 def _get_tokenizer():
-    """懒加载 Qwen tokenizer (项目需求)"""
+    """懒加载 Qwen tokenizer """
     global _tokenizer
     if _tokenizer is None:
         try:

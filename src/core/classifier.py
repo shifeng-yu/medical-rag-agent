@@ -1,6 +1,6 @@
 # ============================================================
 # 两级问题分类模块
-# 来源：规则预判断 + 大模型兜底两级分类
+# 两级分类：规则预判断 + 大模型兜底
 # - L1: 关键词规则快速匹配 (毫秒级)
 # - L2: Qwen 二分类兜底 (<100ms)
 # ============================================================
@@ -13,7 +13,7 @@ from src.utils.helpers import match_keywords, load_keywords, load_prompt_templat
 
 class QueryClassifier:
     """
-    两级问题分类器 (项目需求)
+    两级问题分类器 
     判断用户问题应路由到:
     - "local": 本地医疗知识库 (常见病/常规问诊)
     - "pubmed": PubMed 离线文献库 (罕见病/前沿/时效性)
@@ -42,13 +42,13 @@ class QueryClassifier:
 
     def classify(self, query: str) -> str:
         """
-        两级分类主入口 (项目需求)
+        两级分类主入口 
         返回: "local" | "pubmed" | "both"
         """
         # L1: 关键词规则快速匹配 ( 毫秒级)
         has_keyword, has_temporal = match_keywords(query, self.diseases, self.drugs)
 
-        # 规则判断 (项目需求)
+        # 规则判断 
         if has_keyword and not has_temporal:
             # 命中常见病关键词 + 无时效性表述 → 本地知识库
             logger.debug(f"[分类-L1] 关键词命中, 路由到本地库 | query={query[:60]}")
@@ -65,7 +65,7 @@ class QueryClassifier:
 
     def _llm_classify(self, query: str) -> str:
         """
-        L2: Qwen 二分类 (项目需求)
+        L2: Qwen 二分类 
         Prompt: 极简二分类，只输出 "本地库" 或 "文献库"
         来源: 「Prompt 很简单，只要求输出"本地库"或"文献库"，全程不到100ms」
         """
@@ -95,7 +95,7 @@ class QueryClassifier:
 
     def should_trigger_high_judge(self, query: str) -> bool:
         """
-        判断是否需要触发高等级校验 (项目需求)
+        判断是否需要触发高等级校验 
         涉及诊断、用药的核心医疗问题 → 触发 LLM-Judge
         普通咨询 → 可跳过校验提升速度
         来源: 「自主判断是否触发高等级校验」
@@ -112,13 +112,13 @@ class QueryClassifier:
 
     def get_source_weight(self, query: str, classification: str) -> Tuple[float, float]:
         """
-        获取双源检索权重 (项目需求/ 场景化来源权重)
+        获取双源检索权重 (场景化来源权重)
         返回: (local_weight, pubmed_weight)
         """
         if classification == "local":
-            return 0.7, 0.3   # 常见病优先本地库 (项目需求)
+            return 0.7, 0.3   # 常见病优先本地库 
         elif classification == "pubmed":
-            return 0.3, 0.7   # 前沿/罕见病优先文献 (项目需求)
+            return 0.3, 0.7   # 前沿/罕见病优先文献 
         else:
             return 0.5, 0.5   # 默认均衡
 

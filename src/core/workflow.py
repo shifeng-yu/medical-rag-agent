@@ -1,6 +1,6 @@
 # ============================================================
 # 主工作流编排模块
-# 复现 RAGFlow 可视化图工作流 (项目需求) 的 Python 等价实现
+# 复现 RAGFlow 可视化图工作流的 Python 等价实现
 #
 # DAG 流程:
 #   START → classify → [并行] retrieve_local + retrieve_pubmed
@@ -19,7 +19,6 @@ from loguru import logger
 from config.settings import settings
 from src.core.classifier import classifier
 # CPU/GPU 自适应: 有Milvus Docker用pymilvus, 否则用Milvus Lite
-from config.settings import settings
 if settings.use_milvus_lite:
     from src.core.retriever_lite import lite_retriever as retriever
 else:
@@ -35,7 +34,7 @@ from src.monitoring.logger import request_logger, RequestMetrics
 
 class MedicalRAGWorkflow:
     """
-    全科医疗问诊 RAG 智能助手主工作流 (项目需求)
+    全科医疗问诊 RAG 智能助手主工作流 
     严格复现 RAGFlow 图工作流的节点调度逻辑
     """
 
@@ -45,7 +44,7 @@ class MedicalRAGWorkflow:
         session_id: Optional[str] = None,
     ) -> Dict:
         """
-        主入口: 执行完整 RAG 问诊流程 (项目需求)
+        主入口: 执行完整 RAG 问诊流程 
         对应 RAGFlow 工作流的所有节点
 
         返回:
@@ -61,7 +60,7 @@ class MedicalRAGWorkflow:
         metrics.query = query
 
         try:
-            # ---- 1. 会话管理 (项目需求) ----
+            # ---- 1. 会话管理  ----
             session_id = session_manager.get_or_create_session(session_id)
             metrics.session_id = session_id
             session_manager.add_message(session_id, "user", query)
@@ -94,7 +93,7 @@ class MedicalRAGWorkflow:
                 session_id, query
             )
 
-            # ---- 2. 问题分类 (项目需求/ 分类条件分支节点) ----
+            # ---- 2. 问题分类 (分类条件分支节点) ----
             classification = classifier.classify(query)
             metrics.classification_label = classification
             need_high_judge = classifier.should_trigger_high_judge(query)
@@ -102,7 +101,7 @@ class MedicalRAGWorkflow:
             # 获取来源权重 ( 场景化来源权重)
             source_weights = classifier.get_source_weight(query, classification)
 
-            # ---- 3. 双源并行检索 (项目需求/ 并行检索节点) ----
+            # ---- 3. 双源并行检索 (并行检索节点) ----
             for attempt in range(settings.max_retry_tool_call + 1):
                 try:
                     local_results, pubmed_results, retrieval_latency = (
@@ -116,7 +115,7 @@ class MedicalRAGWorkflow:
                         f"检索失败 (attempt {attempt + 1}): {e}"
                     )
                     if attempt >= settings.max_retry_tool_call:
-                        # 降级 (项目需求)
+                        # 降级 
                         local_results, pubmed_results = [], []
                         metrics.retrieval_latency_ms = 0
                     await asyncio.sleep(0.5)
@@ -136,7 +135,7 @@ class MedicalRAGWorkflow:
                     "session_id": session_id,
                 }
 
-            # ---- 4. 重排序 (项目需求3/ BGE-M3重排序节点) ----
+            # ---- 4. 重排序 (BGE-M3重排序节点) ----
             reranked = reranker.rerank(
                 query, local_results, pubmed_results,
                 source_weights=source_weights,
@@ -151,7 +150,7 @@ class MedicalRAGWorkflow:
             for retry in range(settings.max_retry_generation + 1):
                 metrics.retry_count = retry
 
-                # 5a. 大模型生成节点 (项目需求)
+                # 5a. 大模型生成节点 
                 if retry > 0:
                     # 根据校验反馈重生成 / 调整检索关键词
                     expanded_query = (
@@ -180,7 +179,7 @@ class MedicalRAGWorkflow:
                 )
                 metrics.generation_latency_ms += gen_latency
 
-                # 5b. 幻觉校验节点 (项目需求/ 规则+LLM-Judge)
+                # 5b. 幻觉校验节点 (规则+LLM-Judge)
                 passed, j_result, feedback = judge.validate(
                     query=query,
                     answer=answer,
@@ -218,10 +217,10 @@ class MedicalRAGWorkflow:
                     logger.warning(f"[合规拦截] {v['type']}: {v['detail']}")
                 final_answer = safety_filter.get_refusal_response("out_of_scope")
 
-            # ---- 6. 存储对话记录 (项目需求) ----
+            # ---- 6. 存储对话记录  ----
             session_manager.add_message(session_id, "assistant", final_answer)
 
-            # ---- 7. 记录监控指标 (项目需求) ----
+            # ---- 7. 记录监控指标  ----
             metrics.success = True
             metrics.final_output = final_answer
             request_logger.log_request(metrics)

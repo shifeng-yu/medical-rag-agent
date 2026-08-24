@@ -1,6 +1,6 @@
 # ============================================================
 # 会话缓存管理 + 动态上下文压缩模块
-# 来源：独立会话缓存「动态上下文压缩」
+# 独立会话缓存 + 动态上下文压缩
 # - Python 内存字典，key=session_id，24h TTL
 # - Token 计数触发压缩（>2000 或 >4轮）
 # - 早期对话摘要 + 近4轮保留
@@ -18,7 +18,7 @@ from src.utils.helpers import count_tokens, load_prompt_template
 
 @dataclass
 class SessionData:
-    """单个会话的数据结构 (项目需求)"""
+    """单个会话的数据结构 """
     session_id: str
     created_at: float = field(default_factory=time.time)
     last_access: float = field(default_factory=time.time)
@@ -31,7 +31,7 @@ class SessionData:
 
 class SessionManager:
     """
-    会话管理器 (项目需求)
+    会话管理器 
     - 每个用户独立 session_id，内存字典存储
     - 24h 自动过期清理
     - 动态上下文压缩：token > 2000 或轮次 > 4 → 触发
@@ -80,13 +80,13 @@ class SessionManager:
             session = self._sessions.get(session_id)
             return session.history.copy() if session else []
 
-    # ---- 动态上下文压缩 (项目需求) ----
+    # ---- 动态上下文压缩  ----
 
     def build_context(
         self, session_id: str, current_query: str
     ) -> Tuple[str, int]:
         """
-        构建发送给大模型的完整上下文 (项目需求)
+        构建发送给大模型的完整上下文 
         策略:
         1. 计算总 token 数
         2. 如果 >2000 或 >4轮 → 触发压缩
@@ -126,7 +126,7 @@ class SessionManager:
         self, session: SessionData, history: List[Dict], current_query: str
     ) -> str:
         """
-        执行上下文压缩并构建输出 (项目需求)
+        执行上下文压缩并构建输出 
         - 早期对话(>4轮) → 大模型提取摘要
         - 近4轮 → 完整保留
         - 拼接: [摘要] + [近4轮] + [当前query]
@@ -170,7 +170,7 @@ class SessionManager:
 
     def _generate_summary(self, early_history: List[Dict]) -> str:
         """
-        大模型生成历史对话摘要 (项目需求)
+        大模型生成历史对话摘要 
         Prompt: 只保留症状/病史/诊断结果/用药情况
         来源: 「把核心问诊信息提取出来，做成简洁摘要，不超过200字」
         """
@@ -195,7 +195,7 @@ class SessionManager:
             from src.core.generator import generate_text
 
             summary = generate_text(prompt, max_tokens=256)
-            return summary[:200]  # 限200字 (项目需求)
+            return summary[:200]  # 限200字 
         except Exception as e:
             logger.warning(f"摘要生成失败，使用简单截断: {e}")
             # 降级：取早期对话的文本截断

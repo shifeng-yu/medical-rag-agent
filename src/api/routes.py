@@ -1,6 +1,5 @@
 # ============================================================
 # FastAPI 路由定义
-# 来源：项目需求
 # ============================================================
 
 from typing import List
@@ -26,7 +25,6 @@ router = APIRouter(prefix="/api/v1", tags=["medical-rag"])
 async def health_check():
     """
     健康检查接口
-    来源: 项目需求
     """
     milvus_ok = False
     try:
@@ -145,7 +143,7 @@ async def batch_chat(req: BatchQueryRequest):
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats():
     """
-    获取运行统计 (项目需求)
+    获取运行统计 
     返回: 总请求数/成功率/平均响应时间/校验通过率
     """
     stats = request_logger.get_stats()

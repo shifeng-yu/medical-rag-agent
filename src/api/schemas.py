@@ -1,6 +1,5 @@
 # ============================================================
 # FastAPI Pydantic 请求/响应模型
-# 来源：「API输入输出格式与baseline一致」
 # ============================================================
 
 from typing import List, Optional, Dict
@@ -20,7 +19,7 @@ class QueryRequest(BaseModel):
     )
     session_id: Optional[str] = Field(
         default=None,
-        description="会话ID，不传则自动创建新会话 (项目需求)",
+        description="会话ID，不传则自动创建新会话 ",
         example="550e8400-e29b-41d4-a716-446655440000",
     )
 
@@ -44,7 +43,7 @@ class SourceInfo(BaseModel):
 
 
 class JudgeResult(BaseModel):
-    """校验结果 (项目需求)"""
+    """校验结果 """
     layer: str = Field(description="校验层级: rule / judge / both / degraded / error")
     scores: Optional[Dict[str, float]] = Field(
         default=None, description="LLM-Judge三维打分"
@@ -80,7 +79,7 @@ class HealthResponse(BaseModel):
 
 
 class StatsResponse(BaseModel):
-    """统计指标响应 (项目需求)"""
+    """统计指标响应 """
     total_requests: int
     success_rate: float
     avg_latency_ms: float

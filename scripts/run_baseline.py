@@ -1,6 +1,5 @@
 # ============================================================
 # Baseline RAG 对比脚本
-# 来源：项目需求
 # 用于与优化方案做 AB 测试 ( 同一台机器、统一接口格式)
 # ============================================================
 
@@ -35,18 +34,17 @@ class QueryResponse(BaseModel):
 
 class BaselineRAG:
     """
-    Baseline RAG (项目需求)
+    Baseline RAG 
     - LlamaIndex 框架
     - 固定 512 字符分块 (通用分块)
     - 仅本地知识库单源检索
-    来源: Q25「LlamaIndex搭完基础RAG流程」+ Q15「baseline参数」
     """
 
     def __init__(self):
         self._index = None
 
     def build_index(self):
-        """用 LlamaIndex 构建单库索引 (项目需求)"""
+        """用 LlamaIndex 构建单库索引 """
         try:
             from llama_index.core import (
                 VectorStoreIndex, SimpleDirectoryReader, Settings
@@ -54,7 +52,7 @@ class BaselineRAG:
             from llama_index.embeddings.huggingface import HuggingFaceEmbedding
             from llama_index.core.node_parser import SentenceSplitter
 
-            # 固定 512 字符分块 (项目需求)
+            # 固定 512 字符分块 
             Settings.text_splitter = SentenceSplitter(
                 chunk_size=512,
                 chunk_overlap=50,
@@ -141,8 +139,7 @@ async def baseline_chat(req: QueryRequest):
 
 def evaluate_on_medqa(test_file: str, api_url: str) -> Dict:
     """
-    MedQA 测试集评估 (项目需求)
-    来源: Q15「公开中文MedQA测试集, 2134条标注样本」
+    MedQA 测试集评估 
     """
     import json
     import requests

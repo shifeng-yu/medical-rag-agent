@@ -1,6 +1,5 @@
 # ============================================================
 # BGE-M3 两阶段重排序 + 场景化来源权重
-# 来源：项目需求
 # ============================================================
 
 import time
@@ -12,7 +11,7 @@ from config.settings import settings
 
 class SourceAwareReranker:
     """
-    来源感知重排序器 (项目需求)
+    来源感知重排序器 
     两阶段:
     - 粗排: 按 Milvus 向量相似度快速排序
     - 精排: BGE-M3 Cross-Encoder 逐对打分
@@ -25,7 +24,7 @@ class SourceAwareReranker:
 
     @property
     def model(self):
-        """懒加载 BGE-M3 Cross-Encoder 模式 (项目需求)"""
+        """懒加载 BGE-M3 Cross-Encoder 模式 """
         if self._cross_encoder is None:
             try:
                 from sentence_transformers import CrossEncoder
@@ -48,7 +47,7 @@ class SourceAwareReranker:
         top_k: int = None,
     ) -> List[Dict]:
         """
-        两阶段重排序 (项目需求)
+        两阶段重排序 
         参数:
             source_weights: (local_weight, pubmed_weight) 来源权重
         返回: 排序后的合并结果
@@ -71,7 +70,7 @@ class SourceAwareReranker:
         local_weight, pubmed_weight = source_weights
         scored = []
         for item in coarse_candidates:
-            # Cross-Encoder 相关性打分 (项目需求)
+            # Cross-Encoder 相关性打分 
             cross_score = self._cross_score(query, item["content"])
 
             # 来源权重加权 ( 常见病优先本地指南, 前沿优先文献)
@@ -113,7 +112,7 @@ class SourceAwareReranker:
 
     def build_context_text(self, reranked_results: List[Dict]) -> str:
         """
-        构建检索上下文文本 (项目需求)
+        构建检索上下文文本 
         格式: 标注来源, 优先排序后的内容
         """
         if not reranked_results:

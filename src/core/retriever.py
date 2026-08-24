@@ -1,6 +1,5 @@
 # ============================================================
 # Milvus 双源并行检索模块
-# 来源：项目需求
 # - BGE-M3 将 query 编码为 1024 维向量
 # - 并行检索 medical_kb + pubmed_literature
 # - 返回带元数据的 chunk 列表
@@ -16,7 +15,7 @@ from config.settings import settings
 
 class DualSourceRetriever:
     """
-    双源检索器 (项目需求)
+    双源检索器 
     - 两个独立 Milvus Collection
     - BGE-M3 向量化 (1024维)
     - 并行检索 (asyncio.gather)
@@ -29,7 +28,7 @@ class DualSourceRetriever:
         self._connected = False
         logger.info("双源检索器已初始化")
 
-    # ========== 连接管理 (项目需求) ==========
+    # ========== 连接管理  ==========
 
     def connect(self):
         """连接 Milvus ( 单机版)"""
@@ -72,13 +71,13 @@ class DualSourceRetriever:
         return self._embedder
 
     def encode_query(self, query: str) -> List[float]:
-        """将 query 编码为 1024 维向量 (项目需求)"""
+        """将 query 编码为 1024 维向量 """
         embedding = self.embedder.encode(
             query, normalize_embeddings=True
         )
         return embedding.tolist()
 
-    # ========== 检索 (项目需求/ 真正并行检索) ==========
+    # ========== 检索 (真正并行检索) ==========
 
     async def retrieve(
         self,
@@ -149,7 +148,7 @@ class DualSourceRetriever:
         top_k: int,
         source: str,
     ) -> List[Dict]:
-        """执行 Milvus 向量检索 (项目需求)"""
+        """执行 Milvus 向量检索 """
         if collection is None:
             return []
 
@@ -194,7 +193,7 @@ class DualSourceRetriever:
     def degrade_search(self, query: str) -> List[Dict]:
         """
         降级检索: 工具调用失败时返回空结果
-        触发大模型用通用知识回答 (项目需求)
+        触发大模型用通用知识回答 
         """
         logger.warning(f"检索降级: 返回空结果, 将使用通用知识回答 | query={query[:60]}")
         return []

@@ -1,6 +1,5 @@
 # ============================================================
 # 本地医疗知识库数据导入脚本
-# 来源：项目需求
 # ============================================================
 
 import sys
@@ -50,7 +49,7 @@ def ingest_to_milvus(
     collection_name: str,
     batch_size: int = 100,
 ):
-    """将分块结果向量化并写入 Milvus (项目需求)"""
+    """将分块结果向量化并写入 Milvus """
     from sentence_transformers import SentenceTransformer
 
     # 加载 BGE-M3

@@ -1,6 +1,6 @@
 # ============================================================
 # CPU/GPU 统一模型加载器
-# GPU模式: GPTQ INT4 (项目需求)
+# GPU模式: GPTQ INT4 
 # CPU模式: 标准transformers (当前机器适配)
 # 架构代码不变，仅加载方式不同
 # ============================================================
@@ -31,7 +31,7 @@ def load_qwen():
     )
 
     if settings.use_gptq:
-        # GPU模式: GPTQ INT4 (项目需求)
+        # GPU模式: GPTQ INT4 
         _model = AutoModelForCausalLM.from_pretrained(
             model_path,
             dtype=torch.float16,

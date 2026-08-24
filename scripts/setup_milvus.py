@@ -1,6 +1,5 @@
 # ============================================================
 # Milvus Collection 初始化脚本
-# 来源：Q20「两个独立Collection，BGE-M3 1024维向量」
 # ============================================================
 
 import sys
@@ -16,7 +15,7 @@ from config.settings import settings
 
 
 def create_collections():
-    """创建两个 Milvus Collection (项目需求)"""
+    """创建两个 Milvus Collection """
 
     # 连接 Milvus
     connections.connect(
@@ -46,7 +45,7 @@ def create_collections():
 
     schema_kb = CollectionSchema(
         fields=common_fields,
-        description="本地权威医疗知识库 (项目需求)",
+        description="本地权威医疗知识库 ",
     )
     collection_kb = Collection(name=collection_kb_name, schema=schema_kb)
 
@@ -70,7 +69,7 @@ def create_collections():
 
     schema_pubmed = CollectionSchema(
         fields=common_fields,
-        description="PubMed 离线文献库 (项目需求)",
+        description="PubMed 离线文献库 ",
     )
     collection_pubmed = Collection(name=collection_pubmed_name, schema=schema_pubmed)
     collection_pubmed.create_index(

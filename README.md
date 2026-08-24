@@ -2,9 +2,11 @@
 
 基于 RAGFlow + Qwen-14B + BGE-M3 + Milvus 的私有化全链路医疗问诊 Agent。
 
+[![GitHub](https://img.shields.io/badge/GitHub-仓库地址-181717?logo=github)](https://github.com/yyyyyyyysf/medical-rag-agent)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
 [![Milvus](https://img.shields.io/badge/Milvus-2.4+-orange.svg)](https://milvus.io/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 项目概述
 
@@ -61,11 +63,13 @@
 │   ├── generate_local_kb.py # 生成本地 Q&A 示例数据
 │   ├── generate_pubmed_library.py
 │   ├── run_baseline.py      # Baseline RAG 对照（LlamaIndex）
+│   ├── ablation.py          # 消融实验框架（模块可开关，归因验证）
 │   └── generate_samples.py  # 生成知识库样本
 ├── ragflow_plugins/         # RAGFlow 可插拔分块插件
 ├── prompts/                 # Prompt 模板
 ├── data/                    # 关键词库 + 样本数据
 │   ├── common_diseases_drugs.txt
+│   ├── medqa_test.json      # 评测测试集（30条内置样例，可扩展至完整 MedQA 2134条）
 │   └── samples/             # PubMed (9科×200条) + 本地KB (4科×200条)
 ├── tests/                   # 单元测试 + 幻觉率评估框架
 ├── docker-compose.yml       # 容器编排
@@ -84,6 +88,10 @@
 ### 安装
 
 ```bash
+# 0. 克隆仓库
+git clone https://github.com/yyyyyyyysf/medical-rag-agent.git
+cd medical-rag-agent
+
 # 1. 安装依赖
 pip install -r requirements.txt
 
@@ -140,6 +148,36 @@ python scripts/run_baseline.py --eval data/medqa_test.json --api http://localhos
         → BGE-M3 重排序(粗排+精排+来源权重)
         → LLM 生成(Qwen/DeepSeek) → 规则校验+LLM-Judge打分
         → 通过则返回 / 不通过则重试(max 2次)
+```
+
+## 消融实验设计
+
+检索准确率 27% 的提升（61.8% → 78.5%）是多模块叠加的结果，为验证各模块的独立贡献，提供消融实验框架：
+
+| 模块 | 关闭方式 | 验证的问题 |
+|------|---------|-----------|
+| LLM-Judge 幻觉校验 | `--disable judge` | 校验层对幻觉率/准确率的影响 |
+| BGE-M3 两阶段重排序 | `--disable reranker` | 重排序对检索精度的贡献 |
+| 场景化来源权重 | `--disable source_weight` | 双库加权策略 vs 等权拼接 |
+| 医疗定制分块 | `--disable custom_chunk` | 定制分块 vs 通用 512 分块（需配合 ingest 重建索引） |
+
+```bash
+python scripts/ablation.py                          # 完整配置
+python scripts/ablation.py --disable judge          # 关掉幻觉校验
+python scripts/ablation.py --disable judge reranker # 关掉多个模块
+python scripts/ablation.py --samples 50             # 只跑前50条快速验证
+```
+
+> 注：custom_chunk 发生在数据摄入阶段（ingest），关闭它需用通用分块参数重新建库后再评测；本框架负责其余在线模块的开关与统一评测口径。
+
+## 测试集说明
+
+`data/medqa_test.json` 提供 **30 条内置评测样例**（本地知识库 18 条 + PubMed 文献 12 条），答案均可在 `data/samples/` 知识库中溯源，用于快速验证评测管线与消融框架（如 `python scripts/ablation.py --samples 5`）。
+
+完整指标（检索准确率 78.5% vs 61.8%）基于公开 **MedQA 中文医学问答测试集（2134 条）** 评测，该数据集体积较大，未随仓库分发，可替换 `data/medqa_test.json` 为完整版后复现：
+
+```bash
+python scripts/run_baseline.py --eval data/medqa_test.json --api http://localhost:8000
 ```
 
 ## RAGFlow 插件
