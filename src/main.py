@@ -51,7 +51,7 @@ from fastapi.responses import JSONResponse
 async def add_compliance_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Medical-Disclaimer"] = (
-        "This system provides medical科普 reference only. "
+        "This system provides medical reference information only. "
         "It does NOT provide diagnosis, prescription, or treatment advice. "
         "Consult a licensed physician for any health concerns."
     )
