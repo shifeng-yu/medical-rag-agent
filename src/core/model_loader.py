@@ -5,8 +5,8 @@
 # 架构代码不变，仅加载方式不同
 # ============================================================
 
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+# 惰性导入: torch/transformers 体积大且部分环境无 GPU 版，
+# 仅在真正加载模型时才 import，避免拖慢模块导入（如测试环境）。
 from loguru import logger
 from config.settings import settings
 
@@ -21,6 +21,9 @@ def load_qwen():
     global _tokenizer, _model
     if _model is not None:
         return _tokenizer, _model
+
+    import torch
+    from transformers import AutoTokenizer, AutoModelForCausalLM
 
     model_path = settings.qwen_model_path
     logger.info(f"加载 Qwen 模型: {model_path}")
@@ -60,6 +63,8 @@ def generate_text(
     do_sample: bool = False,
 ) -> str:
     """统一文本生成接口"""
+    import torch
+
     tokenizer, model = load_qwen()
 
     inputs = tokenizer(prompt, return_tensors="pt")
