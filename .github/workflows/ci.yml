@@ -45,4 +45,11 @@ jobs:
           FORCE_CPU: "1"
           PYTHONIOENCODING: "utf-8"
         run: |
-          pytest tests/ -v --tb=short
+          pytest tests/ -v --tb=long || {
+            echo "===== 测试失败，诊断环境 =====";
+            python -c "import sys; print('Python:', sys.version)";
+            python -c "import milvus_lite; print('milvus_lite OK', getattr(milvus_lite, '__version__', '?'))" 2>&1 || echo "milvus_lite import FAILED";
+            python -c "from pymilvus import Collection; print('pymilvus OK')" 2>&1 || echo "pymilvus import FAILED";
+            python -c "import pydantic; print('pydantic:', pydantic.__version__)" 2>&1;
+            exit 1;
+          }
