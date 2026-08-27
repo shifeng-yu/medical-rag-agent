@@ -10,7 +10,6 @@ import json
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 from loguru import logger
-from milvus_lite import MilvusLite, CollectionSchema, FieldSchema, DataType
 from config.settings import settings
 
 
@@ -19,7 +18,7 @@ class LiteRetriever:
 
     def __init__(self):
         self._embedder = None
-        self._db: Optional[MilvusLite] = None
+        self._db = None  # MilvusLite 实例，惰性导入（仅在 connect 时加载）
         self._db_path = str(Path(settings.log_dir).parent / "milvus_lite")
         self._collections_ready = False
         Path(self._db_path).mkdir(parents=True, exist_ok=True)
@@ -38,6 +37,9 @@ class LiteRetriever:
     def connect(self):
         if self._db is not None:
             return
+        # 惰性导入: milvus_lite 仅在真正需要嵌入式向量库时加载，
+        # 避免在无该依赖的环境（如 CI 测试）模块导入即失败。
+        from milvus_lite import MilvusLite, CollectionSchema, FieldSchema, DataType
         self._db = MilvusLite(self._db_path)
         dim = settings.embedding_dim
 
