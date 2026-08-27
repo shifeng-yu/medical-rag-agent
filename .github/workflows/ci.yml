@@ -46,17 +46,11 @@ jobs:
           PYTHONIOENCODING: "utf-8"
         run: |
           set +e
-          pytest tests/ -v --tb=long 2>&1 | tee /tmp/pytest.log
-          STATUS=${PIPESTATUS[0]}
+          pytest tests/ -v --tb=long > /tmp/pytest.log 2>&1
+          STATUS=$?
           if [ $STATUS -ne 0 ]; then
-            echo "::error::===== 测试失败，最后 60 行日志 ====="
-            tail -60 /tmp/pytest.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            echo "::error::===== 诊断环境 ====="
-            python -c "import sys; print('Python:', sys.version)" 2>&1 | while IFS= read -r line; do echo "::error::$line"; done
-            python -c "import milvus_lite; print('milvus_lite OK')" 2>&1 | while IFS= read -r line; do echo "::error::$line"; done
-            python -c "from pymilvus import Collection; print('pymilvus OK')" 2>&1 | while IFS= read -r line; do echo "::error::$line"; done
-            python -c "import pydantic; print('pydantic:', pydantic.__version__)" 2>&1 | while IFS= read -r line; do echo "::error::$line"; done
+            echo "::error::TEST_FAILED_STATUS=$STATUS"
+            echo "::error::$(grep -E 'FAILED|ERROR|Error|Exception|Traceback' /tmp/pytest.log | head -30 | tr '\n' ';')"
+            echo "::error::DIAG:python=$(python -c 'import sys; print(sys.version.split()[0])' 2>&1) milvus_lite=$(python -c 'import milvus_lite; print("OK")' 2>&1) pymilvus=$(python -c 'from pymilvus import Collection; print("OK")' 2>&1) pydantic=$(python -c 'import pydantic; print(pydantic.__version__)' 2>&1)"
             exit $STATUS
           fi
