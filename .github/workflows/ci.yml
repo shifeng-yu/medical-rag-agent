@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies (lightweight, no GPU)
         run: |
           pip install --upgrade pip
-          pip install pytest httpx
+          pip install pytest "httpx<0.28"
           pip install fastapi==0.110.0 "uvicorn[standard]==0.29.0" pydantic==2.7.0 pydantic-settings==2.2.0
           pip install loguru==0.7.2 python-dotenv==1.0.1 pymilvus==2.4.3 python-multipart==0.0.9
           pip install tiktoken==0.7.0 numpy==1.26.4
