@@ -80,7 +80,11 @@ async def startup():
     logger.info("全科医疗问诊RAG智能助手 启动中...")
     logger.info(f"模型路径: {settings.qwen_model_path}")
     logger.info(f"Milvus: {settings.milvus_host}:{settings.milvus_port}")
-    logger.info(f"量化方式: GPTQ INT4 (Qwen-14B ~8G显存)")
+    load_mode = (
+        f"GPTQ INT4 (Qwen-14B ~8G 显存)" if settings.use_gptq
+        else "标准 transformers 加载"
+    )
+    logger.info(f"模型加载: {load_mode}")
     logger.info("=" * 60)
 
     # 预连接检索库（按配置选定的后端，见 src/core/retrieval.get_retriever）

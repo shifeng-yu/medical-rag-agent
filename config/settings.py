@@ -15,7 +15,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 class Settings(BaseSettings):
     """全局配置：模型路径、向量库连接、阈值参数"""
 
-    # ========== 模型路径 ( GPTQ INT4量化) ==========
+    # ========== 模型路径 (标准加载 / GPTQ INT4 可选) ==========
     qwen_model_path: str = os.getenv("QWEN_MODEL_PATH", "/models/Qwen-14B-Chat-GPTQ-Int4")
     bge_model_path: str = os.getenv("BGE_MODEL_PATH", "/models/bge-m3")
 
@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     # ========== 设备配置 ( GPU优先，CPU fallback) ==========
     device: str = os.getenv("DEVICE", "cuda" if os.getenv("FORCE_CPU", "0") == "0" else "cpu")
     max_gpu_memory: int = 10  # GB, 量化后模型总占用 <10G
-    use_gptq: bool = False  # CPU模式不使用GPTQ，加载标准transformers模型
+    use_gptq: bool = os.getenv("USE_GPTQ", "0").lower() in (
+        "1", "true", "yes", "on"
+    )  # 默认 0=标准 transformers 加载（CPU/复现即用）；1=GPTQ INT4（生产 docker compose 已置 1，本地/CI 无需开）
     use_milvus_lite: bool = os.getenv("USE_MILVUS_LITE", "1").lower() in (
         "1", "true", "yes", "on"
     )  # 0/false → Docker Milvus（生产/docker compose）；1/true → 嵌入式 Lite（本地开发/CI）
@@ -62,7 +64,7 @@ class Settings(BaseSettings):
     max_retry_generation: int = int(os.getenv("MAX_RETRY_GENERATION", "2"))   #  最多重试2次
     max_retry_tool_call: int = int(os.getenv("MAX_RETRY_TOOL_CALL", "2"))     #  工具调用重试2次
 
-    # ========== LLM-Judge 配置 ( 三维均>6分) ==========
+    # ========== LLM-Judge 配置 ( 三维均 ≥ 阈值分即通过, 含阈值; 默认6) ==========
     judge_score_threshold: int = int(os.getenv("JUDGE_SCORE_THRESHOLD", "6"))
 
     # ========== 关键词分类 ( 快速匹配) ==========
