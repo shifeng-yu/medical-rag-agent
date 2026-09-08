@@ -23,7 +23,7 @@ class HallucinationJudge:
     """
     幻觉防控两层校验机制
     - 规则层: 硬红线拦截 (编造实体/越权诊断/处方推荐)
-    - 模型层: 三维打分 (事实一致性/逻辑合理性/回答有用性), 均>6分通过
+    - 模型层: 三维打分 (事实一致性/逻辑合理性/回答有用性), 均≥阈值分(默认6)即通过
     """
 
     def __init__(self):
@@ -131,8 +131,8 @@ class HallucinationJudge:
         1. 事实一致性 (factual_consistency): 回答是否基于检索上下文，有无编造
         2. 逻辑合理性 (logical_coherence): 回答逻辑是否通顺，有无矛盾
         3. 回答有用性 (answer_helpfulness): 是否能解决用户问题
-        每项 0-10 分，均 >6 分才通过
-        来源: 「从三个维度做0-10分打分」「均高于6分通过」
+        每项 0-10 分，均 ≥ 阈值分（默认 6，含 6）才通过
+        来源: 「从三个维度做0-10分打分」；判定: 三维均 ≥ score_threshold 即通过（含 6）
         """
         context_text = "\n".join(
             f"[{c.get('source', '')}] {c.get('content', '')}"
@@ -184,7 +184,7 @@ class HallucinationJudge:
             }
             feedback = result.get("feedback", "")
 
-            # 判断是否全部通过 ( 均>6分)
+            # 判断是否全部通过 ( 均 >= score_threshold，含阈值)
             passed = all(s >= self.score_threshold for s in scores.values())
 
             logger.info(

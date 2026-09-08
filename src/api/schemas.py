@@ -48,7 +48,7 @@ class SourceInfo(BaseModel):
 
 class JudgeResult(BaseModel):
     """校验结果 """
-    layer: str = Field(description="校验层级: rule / judge / both / degraded / error")
+    layer: str = Field(description="校验层级: rule / rule_only / judge / both（消融关闭时为 ablation_off；拦截/降级等未携带打分时默认取出门原因 kind）")
     scores: Optional[Dict[str, float]] = Field(
         default=None, description="LLM-Judge三维打分"
     )
@@ -96,7 +96,7 @@ class UploadDocumentsResponse(BaseModel):
     """上传接口即时返回：任务已受理，后台异步灌库"""
     task_id: str = Field(description="灌库任务 ID，用于轮询状态")
     status: str = Field(default="processing", description="任务状态")
-    collection: str = Field(description="目标集合: kb / pubmed")
+    collection: str = Field(description="目标集合: local_kb / pubmed（网页上传仅开放 local_kb）")
     department: str = Field(description="科室/主题标签")
     accepted_files: int = Field(description="受理文件数")
 

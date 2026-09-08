@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成本地医疗知识库：2000 条中文常见病问诊QA（10科室 x 200条/科）"""
+"""生成本地医疗知识库演示语料：4 科室 x 200 条中文常见病问诊 QA（共 800 条；可按需扩展科室/条数）"""
 import shutil
 from pathlib import Path
 
