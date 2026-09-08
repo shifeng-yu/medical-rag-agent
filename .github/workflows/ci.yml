@@ -38,6 +38,10 @@ jobs:
           pip install loguru==0.7.2 python-dotenv==1.0.1
           pip install pymilvus==2.4.3
           pip install "marshmallow<4"  # pymilvus 2.4.3 -> environs 依赖旧版 marshmallow API
+          # retriever_lite.py 面向 milvus-lite 3.x API（顶层导出 MilvusLite）；
+          # pymilvus 2.4.3 会把 milvus-lite 钉在 2.4.x（顶层无 MilvusLite），
+          # 故在其后强制升级到与本机一致的 3.x
+          pip install milvus-lite==3.2.1
           pip install python-multipart==0.0.9
           pip install tiktoken==0.7.0 numpy==1.26.4
 
