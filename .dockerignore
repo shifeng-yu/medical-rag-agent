@@ -1,0 +1,25 @@
+# 模型权重与本地数据不入镜像/构建上下文（用 -v 挂载进容器）
+models/
+data/
+!data/common_diseases_drugs.txt   # Dockerfile 需要 COPY 该词表
+volumes/
+logs/
+milvus_lite/
+
+# 环境与缓存
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+.workbuddy/
+
+# 测试/文档/仓库元数据（运行不需要）
+tests/
+docs/
+*.md
+.git/
+.gitignore
+LICENSE
+VERSION

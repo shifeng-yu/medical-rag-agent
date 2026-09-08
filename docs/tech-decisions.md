@@ -4,7 +4,7 @@
 
 ---
 
-## 1. 为什么不用 LangChain 直接搭，而是复现 RAGFlow 工作流？
+## 1. 为什么不用 LangChain 直接搭，而是以 RAGFlow 图工作流为蓝本？
 
 **背景**：项目需要双分支检索、条件分类、校验重试、失败回退的复杂流程。
 
@@ -16,7 +16,7 @@
 | LlamaIndex | 核心定位是 RAG 检索（索引/查询），Agent 流程编排能力弱；默认通用固定长度分块，医疗 Q&A 分块需从零开发 |
 | RAGFlow（选用） | 原生 Q&A 分块模板 + 可视化图工作流，支持条件分支/重试；原生适配 Milvus，Docker 一键离线部署 |
 
-**最终决策**：RAGFlow 承担**知识库管理与文档解析**（注册自定义分块插件 `ragflow_plugins/medical_qa_chunker.py`）；**问答主链路自研**（`src/core/workflow.py` 复现其图编排），一是为了完全可控、能精确复现工作流做 A/B 评测，二是本地量化推理与接口封装需要自己掌控。两者分工明确。
+**最终决策**：RAGFlow 承担**知识库管理与文档解析**（注册自定义分块插件 `ragflow_plugins/medical_qa_chunker.py`）；**问答主链路自研**（`src/core/workflow.py` 以其图编排为蓝本），一是为了完全可控、能精确复现工作流做 A/B 评测，二是本地量化推理与接口封装需要自己掌控。两者分工明确。
 
 ---
 
@@ -47,7 +47,7 @@
 | FP16 直接部署 | 28G 显存需求，12G 单卡无法运行 |
 | 蒸馏小模型 | 需要训练数据与算力，预研阶段成本过高；留作后续迭代方向 |
 
-**实现**：`src/core/model_loader.py` 同时支持 GPU（GPTQ 加载）与 CPU（标准 transformers 加载）双模式，架构代码不变，仅加载方式不同。
+**实现**：加载职责收编于 `src/core/llm.py` 的 `QwenBackend`（懒加载至首次调用），同时支持 GPU（GPTQ 加载）与 CPU（标准 transformers 加载）双模式，架构代码不变，仅加载方式不同。切换后端（真实模型 / 测试用假话务员）只改 `settings.llm_backend`（`qwen` / `fake`），详见 [ADR-0003](adr/0003-llm-service.md)。
 
 ---
 

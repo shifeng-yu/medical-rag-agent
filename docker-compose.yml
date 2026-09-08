@@ -3,8 +3,6 @@
 # 来源：Q1「RAGFlow Docker化私有化部署」+ Q20「Milvus单机版」
 # ============================================================
 
-version: "3.8"
-
 services:
   # ---- Milvus 向量数据库 (Q20: 单机版) ----
   etcd:
@@ -57,28 +55,27 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-    ports:
-      - "19530:19530"   # Milvus gRPC
-      - "9091:9091"     # Milvus 健康检查
+    # host 网络下端口直接占主机，无需（也不支持）ports 映射；见 ADR-0005 决策 7
     depends_on:
       - etcd
       - minio
     network_mode: host
 
-  # ---- RAG 服务 (可选Docker化运行) ----
+  # ---- RAG 服务（容器化生产运行；网页上传/问答入口 :8000） ----
+  # host 网络：etcd(2379)/minio(9000/9001)/milvus(19530/9091)/api(8000)/baseline(8001)
+  # 全部直接监听主机端口，容器间经 localhost 互通（ADR-0005 决策 7/8）。
   medical-rag-api:
     build: .
     container_name: medical-rag-api
-    ports:
-      - "8000:8000"
     environment:
-      - MILVUS_HOST=milvus
+      - MILVUS_HOST=localhost          # host 网络下连本机 milvus-standalone
       - MILVUS_PORT=19530
+      - USE_MILVUS_LITE=0              # 容器内走 pymilvus → Docker Milvus，禁用嵌入式 Lite
       - QWEN_MODEL_PATH=/models/Qwen-14B-Chat-GPTQ-Int4
       - BGE_MODEL_PATH=/models/bge-m3
     volumes:
-      - ./models:/models:ro          # 模型权重 (只读)
-      - ./data:/app/data:ro          # 知识库数据
+      - ./models:/models:ro          # 模型权重 (只读) — 必须预先放置，见 docs/DEPLOYMENT.md
+      - ./data:/app/data             # 知识库数据 rw：网页上传落盘 data/medical_kb/<department>/
       - ./logs:/app/logs
       - ./prompts:/app/prompts:ro
     deploy:
@@ -96,15 +93,14 @@ services:
     depends_on:
       milvus:
         condition: service_healthy
+    network_mode: host
 
-  # ---- Baseline RAG 服务 (Q15: 对照实验) ----
+  # ---- Baseline RAG 服务 (Q15: 对照实验, :8001) ----
   baseline-rag:
     build: .
     container_name: baseline-rag
-    ports:
-      - "8001:8001"
     environment:
-      - MILVUS_HOST=milvus
+      - MILVUS_HOST=localhost
       - MILVUS_PORT=19530
       - BGE_MODEL_PATH=/models/bge-m3
     volumes:
@@ -123,3 +119,4 @@ services:
     depends_on:
       milvus:
         condition: service_healthy
+    network_mode: host
