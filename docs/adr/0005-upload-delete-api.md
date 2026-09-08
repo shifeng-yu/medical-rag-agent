@@ -14,7 +14,7 @@
 2. **命名收敛为 `local_kb` / `pubmed`**：本次新增的 API 参数不再叫 `kb`，文档集合对外统一 `collection=local_kb|pubmed`；`medical_kb` 等历史写法仅保留在既有 settings/元数据/目录名，不加新写法。见 CONTEXT.md 词条。
 3. **上传 = 异步任务 + 落盘 + 重灌同一棵树**：`POST /documents/upload` 受理后返回 `task_id`，后台任务"落盘 `data/medical_kb/<department>/` → MedicalQAChunker 分块 → 写入 Milvus 集合"，与 `ingest_kb.py` 同一链路，不另起炉灶。
 4. **同名文档 = 替换语义**：同一 `department` 下重传同名文件，先删旧 doc_id 的向量再落盘重灌（doc_id = 文件名去后缀，同集合内唯一），知识库不累积重复。这就避免了"upload 加时间戳前缀 → 脚本重灌 → 同内容新 doc_id 二次入库"的重复问题。
-5. **删除 = 文件 + 向量一起清**：补 `retriever.delete_by_doc_id(col, doc_id)`（Docker 走 milvus `delete(expr=...)`，Lite 走自身 delete），新增 `DELETE /documents` 接口，删落盘文件并删对应向量。
+5. **删除 = 文件 + 向量一起清**：补 `retriever.delete_by_doc_id(col, doc_id)`（Docker 走 milvus `delete(expr=...)`，Lite 走自身 delete），新增 `DELETE /api/v1/documents/{doc_id}` 接口（需 `department`/`collection` 查询参数，默认 `collection=local_kb`），删落盘文件并删对应向量。
 6. **上传格式边界**：只收干净文本 `.md/.txt/.json`（json 若是 `{question,answer,...}` 问答结构则按条切，不做 PDF/docx/OCR——轻量私有化，不做重解析）。md/txt 单文件 ≤50MB、单批 ≤20 个。
 7. **Docker 网络修复**：`medical-rag-api` / `baseline-rag` 与 etcd/minio/milvus 统一 `network_mode: host`，`MILVUS_HOST=localhost`——原 bridge 网络解析不到 host 网络里的 milvus 主机名。
 8. **data 卷可写**：`./data:/app/data` 由 `:ro` 改 `rw`（upload 要写盘）；`./models` 保持 `:ro`，DEPLOYMENT 手册把"先放权重再 compose up + 启动校验目录非空"写成硬步骤。

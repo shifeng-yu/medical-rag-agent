@@ -12,13 +12,13 @@
 
 | 亮点 | 具体实现 | 效果 |
 |------|---------|------|
-| 🛡️ **LLM-Judge 双层幻觉防控** | 规则硬拦截 + 模型三维打分（>6 分通过） | 幻觉率 18% → **3%** |
+| 🛡️ **LLM-Judge 双层幻觉防控** | 规则硬拦截 + 模型三维打分（≥6 分通过） | 幻觉率 18% → **3%** |
 | 🔀 **双源检索 + 场景化路由** | 常见病→本地指南，前沿→PubMed 文献 | 检索准确率 +**27%** |
-| 🧠 **14B 模型量化落地** | GPTQ INT4（28G→8G），单卡 12G 可跑 | 平均响应 **1.2s** |
+| 🧠 **14B 大模型本地推理** | Qwen-14B 全链路本地（生产 compose 走 GPTQ INT4 28G→8G；本地/复现标准加载即可） | 平均响应 **1 秒级**（预研自测均值） |
 | 🧪 **可复现评测体系** | `scripts/benchmark.py` + 消融框架（内置 30 条可溯源子集） | 命中率/高风险输出率可 clone 复现，[docs/benchmark.md](docs/benchmark.md) |
 | 📚 **知识库全生命周期** | 网页上传 / 同名替换 / 删除（文件+向量一起清）+ 异步灌库任务 | 知识库可迭代，非只读演示 |
 | 🔌 **可替换检索接缝** | `get_retriever()` 唯一收口：Docker Milvus / Milvus-Lite 同契约 | CI 无 Docker 也能真跑"入库→检索"往返 |
-| 🚢 **可交付部署** | host 网络 Docker 编排 + 部署手册 + ADR-0001~0005 决策留痕 | 按手册即可私有化上线 |
+| 🚢 **可交付部署** | host 网络 Docker 编排 + 部署手册 + ADR-0001~0006 决策留痕 | 按手册即可私有化上线 |
 
 > 技术栈：`Python` `FastAPI` `Qwen-14B` `BGE-M3` `Milvus` `Docker`　·　架构蓝本：`RAGFlow`（Agentic 图工作流编排）
 
@@ -39,9 +39,9 @@ flowchart TB
 
     WF --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 
-    MILVUS["Milvus 向量库<br/>medical_kb + pubmed 双集合"]
+    MILVUS["Milvus 向量库<br/>local_kb + pubmed 双集合"]
     BGE["BGE-M3<br/>编码(1024维) + 精排"]
-    QWEN["Qwen-14B<br/>GPTQ INT4 ~8G"]
+    QWEN["Qwen-14B<br/>本地推理(GPTQ INT4 可选)"]
 
     S4 -. 检索 .-> MILVUS
     S4 -. 编码 .-> BGE
@@ -70,14 +70,14 @@ flowchart TB
   ],
   "judge_result": {
     "layer": "both",
-    "scores": {"fact_consistency": 9, "logic": 8, "usefulness": 9}
+    "scores": {"factual_consistency": 9, "logical_coherence": 8, "answer_helpfulness": 9}
   },
   "latency_ms": 1180,
   "session_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-> 以上即真实响应模型字段（`answer / sources / judge_result / latency_ms / session_id`）。「出门原因」`outcome`（`ok / emergency_blocked / content_blocked / degraded / error / overload / timeout`）只在工作流内部出口模块（`src/core/outcome.py`）打标——写会话、记指标、拼装返回，**不会泄漏到 API 响应**。想看真实效果，启动后打开网页管理台即可（见下节）。
+> 以上即真实响应模型字段（`answer / sources / judge_result / latency_ms / session_id`），示例 JSON 数值仅演示字段结构，非统计口径（响应耗时等对外口径见 docs/benchmark.md，以实际统计为准）。「出门原因」`outcome`（`ok / emergency_blocked / content_blocked / degraded / error / overload / timeout`）只在工作流内部出口模块（`src/core/outcome.py`）打标——写会话、记指标、拼装返回，**不会泄漏到 API 响应**。想看真实效果，启动后打开网页管理台即可（见下节）。
 
 ## 网页管理台与知识库维护
 
@@ -129,6 +129,7 @@ cp .env.example .env
 #   - 检索后端：USE_MILVUS_LITE=false 走 Docker Milvus（下面第 3 步）；
 #     保持 true 则用嵌入式 Milvus Lite（本地/CI 无 Docker，跳过第 3 步）
 #   - LLM 后端：LLM_BACKEND=qwen（真实模型）/ fake（假话务员，免加载模型，适合 CI）
+#   - 模型加载：USE_GPTQ=0 标准加载（默认，本地/复现即用）；容器生产部署由 compose 置 1 启用 GPTQ INT4，见 DEPLOYMENT
 
 # 3. 启动 Milvus 向量库三件套（仅 Docker 模式）
 docker compose up -d etcd minio milvus
@@ -191,7 +192,7 @@ python scripts/benchmark.py --check            # 免模型自检（CI/无 GPU）
 | LLM-Judge 幻觉校验 | `--disable judge` | 校验层对幻觉率/准确率的影响 |
 | BGE-M3 两阶段重排序 | `--disable reranker` | 重排序对检索精度的贡献 |
 | 场景化来源权重 | `--disable source_weight` | 双库加权 vs 等权拼接 |
-| 医疗定制分块 | `--disable custom_chunk` | 定制分块 vs 通用 512 分块 |
+| 医疗定制分块 | 摄入侧重建（通用 512 分块参数重灌后评测；`--disable custom_chunk` 仅记录不开关） | 定制分块 vs 通用 512 分块 |
 
 ```bash
 python scripts/ablation.py                          # 完整配置
@@ -203,14 +204,14 @@ python scripts/ablation.py --samples 50             # 只跑前50条快速验证
 > `data/medqa_test.json` 内置 **30 条可溯源样例**（答案均可在 `data/samples/` 知识库中找到），
 > 用于快速验证评测管线（`--samples 5`）；27%/18%→3% 的**完整评测集复现**属预研阶段线下资产，
 > 仓库内请用 `scripts/benchmark.py`（见上）跑可复现子集口径。
-> 注：custom_chunk 发生在数据摄入阶段，关闭它需用通用分块参数重新建库后评测。
+> 注：custom_chunk 发生在数据摄入阶段（ingest），`scripts/ablation.py` 只记录该维度、不改变本次评测链路（`--disable custom_chunk` 与 full 等效）；真正对比定制 vs 通用分块，需用通用分块参数重新建库后再评测（与 CONTEXT.md「消融评测」口径一致）。
 
 ## 工作流
 
 ```
 用户提问 → 问题分类(关键词+LLM) → 并行检索(本地KB+PubMed)
         → BGE-M3 重排序(粗排+精排+来源权重)
-        → LLM 生成(Qwen-14B GPTQ INT4) → 规则校验+LLM-Judge打分
+        → LLM 生成(Qwen-14B) → 规则校验+LLM-Judge打分
         → 通过则返回 / 不通过则重试(max 2次) / 工具失败则降级
 ```
 
@@ -220,7 +221,7 @@ python scripts/ablation.py --samples 50             # 只跑前50条快速验证
 
 医疗场景风险等级高，系统内置 4 层安全防线：
 
-1. **输入侧**：敏感词过滤 + 10 类急症检测（胸痛/大出血/意识障碍等），命中强制引导 120
+1. **输入侧**：敏感词过滤 + 18 组急症检测规则（胸痛/心绞痛/心梗/心脏主诉/脑卒中/急腹症/急性头痛/大出血/意识障碍/急性呼吸困难/急性中毒/严重外伤/过敏性休克/自杀倾向等），命中强制引导 120
 2. **输出侧**：拦截确定性诊断、处方推荐、剂量指导，替换为标准化拒答话术
 3. **内容侧**：知识来源权威分级（Tier1 指南 / Tier2 说明书 / Tier3 教材 / Tier4 科普），低等级来源用保守话术
 4. **声明侧**：所有 API 响应头携带医学免责声明，仅提供科普参考
@@ -231,7 +232,7 @@ python scripts/ablation.py --samples 50             # 只跑前50条快速验证
 
 为什么不用 LangChain 直接搭、重排为什么分两阶段、量化为什么选 GPTQ？→ 见 [docs/tech-decisions.md](docs/tech-decisions.md)（框架选型）
 
-架构演进决策（出口收拢 / 检索接缝 / LLM 总机 / 消融搭主链路 / 上传删除 API）与领域词汇（`CONTEXT.md`）→ 见 [docs/adr/](docs/adr/)（ADR-0001 ~ 0005）
+架构演进决策（出口收拢 / 检索接缝 / LLM 总机 / 消融搭主链路 / 上传删除 API / 术语标准化扩词式接入）与领域词汇（`CONTEXT.md`）→ 见 [docs/adr/](docs/adr/)（ADR-0001 ~ 0006）
 
 Docker 化私有化部署（端口模型 / 权重预置 / 备份与回滚）→ 见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
@@ -272,7 +273,7 @@ Docker 化私有化部署（端口模型 / 权重预置 / 备份与回滚）→ 
 ├── tests/                   # 单元测试 + API 测试 + 上传/删除契约测试
 ├── CONTEXT.md               # 领域词汇（问诊回合 / 出门原因 / 知识库文档…）
 ├── docs/                    # ADR 决策记录(docs/adr) + 选型(tech-decisions) + 部署手册(DEPLOYMENT)
-├── .github/workflows/ci.yml # CI：轻量依赖无 GPU，push/PR 全量跑 99 项测试
+├── .github/workflows/ci.yml # CI：轻量依赖无 GPU，push/PR 全量跑 120 项测试（2026-09-08 统计）
 ├── docker-compose.yml       # 容器编排（host 网络：milvus + api + baseline）
 └── requirements.txt
 ```

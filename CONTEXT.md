@@ -8,7 +8,7 @@ medical-rag-agent 的领域词条。命名新模块、写测试名、描述重�
 - **问诊问题（query）**：用户的输入。可能被急症/敏感拦截、标准化（`normalize_query`）、分类、作为检索与生成的输入。术语标准化为**扩词式接入**：当 `normalize_query` 结果与原文不同（发生别名→标准术语替换）时，检索用标准术语补检一次并去重合并（`retrieval.merge_dual_results`，键 source+doc_id+content），主检索仍用原始 query。决策见 ADR-0006。
 - **双源检索（dual-source retrieval）**：一次问诊同时检索两个来源——本地医疗知识库（local_kb）与 PubMed 文献（pubmed）。两种后端（Docker Milvus 的 `retriever.py` 与嵌入式 Milvus Lite 的 `retriever_lite.py`）是同一接口下的两个适配器：connect / retrieve / insert / expand_query / encode_query / embedder。**选后端的唯一入口是 `src/core/retrieval.py` 的 `get_retriever()`**（按 `use_milvus_lite` import 期选择并缓存），任何调用方不得再写 if/else 分支；灌库脚本同样经由适配器的 `insert()`。分数统一 **IP 指标**（向量已归一化 → score≈余弦相似度，越大越相关、降序返回）。决策见 ADR-0002。
 - **重排（rerank）**：粗排（向量相似度截断）+ 精排（BGE-M3 Cross-Encoder）+ 场景化来源权重，产出带 `rerank_score` 的有序候选。
-- **幻觉校验（LLM-Judge）**：规则层（`rule_check`）+ 模型层（`llm_judge`）。`judge_result.layer` 取 `rule / rule_only / judge / both`，是裁判模块**自己的内部报告**，与问诊回合的「出门原因」是两套词汇，不混用。消融关闭校验时占位为 `ablation_off`（见「消融评测」）。
+- **幻觉校验（LLM-Judge）**：规则层（`rule_check`）+ 模型层（`llm_judge`）。`judge_result.layer` 取 `rule / rule_only / judge / both`，是裁判模块**自己的内部报告**，与问诊回合的「出门原因」是两套词汇，不混用（仅当校验确实携带打分时 layer 独立取值；拦截/降级/问候短路等未进入打分路径的出口，`outcome.py` 会用出门原因 kind 作为 layer 默认值，如 `ok` / `emergency_blocked`，属已知退化行为）。消融关闭校验时占位为 `ablation_off`（见「消融评测」）。
 
 ## 模型对话（LLM 总机）
 
@@ -39,5 +39,5 @@ medical-rag-agent 的领域词条。命名新模块、写测试名、描述重�
 
 ## 质量与约束
 
-- **返回形状**：`workflow.run` / API 层降级返回固定 6 键：`answer / sources / judge_result / latency_ms / session_id / outcome`。其中 `outcome` 键携带「出门原因」，供评测等下游判断本次回合的出口。sources 白名单字段（title/source/score/publish_time/department）只在 `outcome.to_sources` 一处定义。
+- **返回形状**：`workflow.run` / API 层降级返回固定 6 键：`answer / sources / judge_result / latency_ms / session_id / outcome`。其中 `outcome` 键携带「出门原因」，供评测等下游判断本次回合的出口。sources 白名单字段（title/source/score/publish_time/department/authority_tier/authority_label）只在 `outcome.to_sources` 一处定义（9/7 随来源分级扩展为 7 字段）。
 - **合规**：本产品只做医学科普参考，不构成诊疗建议；急症与敏感内容在入口拦截，诊断/处方/剂量在输出拦截。

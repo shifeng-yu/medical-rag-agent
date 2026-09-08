@@ -1,6 +1,6 @@
 # DEPLOYMENT：Docker 化私有化部署手册
 
-> 适用版本：medical-rag-agent（RAGFlow Agentic 图工作流蓝本自研 + Qwen-14B GPTQ INT4 + BGE-M3 + Milvus 单机）。
+> 适用版本：medical-rag-agent（RAGFlow Agentic 图工作流蓝本自研 + Qwen-14B（生产 compose 启用 GPTQ INT4，本地/复现可标准加载）+ BGE-M3 + Milvus 单机）。
 > 全链路本地推理，数据不出域、无公网 API 调用。编排决策见 `docs/adr/0005-upload-delete-api.md`（决策 7：host 网络；决策 8：data 卷可写、models 只读 + 权重预置硬步骤）。
 
 ## 1. 端口与网络模型
@@ -22,7 +22,7 @@
 | 项 | 要求 |
 |---|---|
 | Docker | 20.10+（compose v2，`docker compose version` 确认） |
-| GPU | NVIDIA 驱动 + `nvidia-container-toolkit`（Qwen-14B INT4 推理约需 **8GB 显存**） |
+| GPU | NVIDIA 驱动 + `nvidia-container-toolkit`。compose 默认启用 GPTQ INT4（Qwen-14B 推理约需 **8GB 显存**）；若改标准加载（`USE_GPTQ=0`）需 ≥16GB 显存或走 CPU |
 | 内存 | ≥ 16GB（模型加载 + milvus/etcd/minio） |
 | 磁盘 | ≥ 20GB（torch+auto-gptq 镜像构建约 10GB，另加数据卷） |
 | 模型权重 | 两份，见步骤 3（一次性准备） |
@@ -48,15 +48,18 @@ test -d models/Qwen-14B-Chat-GPTQ-Int4 && test -n "$(ls -A models/Qwen-14B-Chat-
   && echo "OK: 模型权重就位" || { echo "FAIL: models 目录为空或缺失，禁止启动"; exit 1; }
 ```
 
+> 以上为 compose 默认的 **GPTQ INT4 路径**（`USE_GPTQ=1`）。若改用标准加载（`USE_GPTQ=0`），需下载通用 Qwen-14B-Chat 权重替换目录并把 `QWEN_MODEL_PATH` 一并指过去，校验命令相应调整。
+
 ### 3.2 配置（可选）
 
 ```bash
 cp .env.example .env   # 如需覆盖默认值
 ```
 
-容器内关键变量已由 compose 写死，**无需**手动改：
+容器内关键变量已由 compose 写死默认值，**无需**手动改；仅以下一条可按需调整：
 
 - `USE_MILVUS_LITE=0`：容器走 pymilvus → Docker Milvus。若误设 true，服务会改用嵌入式 Milvus Lite 并把数据写在容器可写层，**容器重建即丢**。
+- `USE_GPTQ=1`：compose 默认置 1，走 GPTQ INT4 加载（对应 3.1 的 GPTQ-Int4 权重目录，约 8GB 显存）。若想用标准加载（≥16GB 显存或 CPU），改 `USE_GPTQ=0` 并把 `QWEN_MODEL_PATH` 指向标准权重目录。
 - `MILVUS_HOST=localhost`：host 网络下直连本机 milvus-standalone。
 
 ### 3.3 构建与启动

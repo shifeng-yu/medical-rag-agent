@@ -16,7 +16,7 @@
 | LlamaIndex | 核心定位是 RAG 检索（索引/查询），Agent 流程编排能力弱；默认通用固定长度分块，医疗 Q&A 分块需从零开发 |
 | RAGFlow（选用） | 原生 Q&A 分块模板 + 可视化图工作流，支持条件分支/重试；原生适配 Milvus，Docker 一键离线部署 |
 
-**最终决策**：RAGFlow 承担**知识库管理与文档解析**（注册自定义分块插件 `ragflow_plugins/medical_qa_chunker.py`）；**问答主链路自研**（`src/core/workflow.py` 以其图编排为蓝本），一是为了完全可控、能精确复现工作流做 A/B 评测，二是本地量化推理与接口封装需要自己掌控。两者分工明确。
+**最终决策（预研选型期记录，落地形态以 DEPLOYMENT §7 为准）**：以 RAGFlow 的 **Agentic 图工作流为架构蓝本**、借鉴其 Q&A 分块思路（另开发了 RAGFlow 环境可用的插件 `ragflow_plugins/medical_qa_chunker.py`），**问答主链路自研**（`src/core/workflow.py` 以其图编排为蓝本），一是为了完全可控、能精确复现工作流做 A/B 评测，二是本地量化推理与接口封装需要自己掌控。**当前仓库运行时不自带 RAGFlow**：知识库管理（`src/api/documents.py`）、解析分块（`src/chunking/`）、问答编排（`src/core/workflow.py`）均由 `src/` 自研实现，Docker 编排仅含 Milvus 栈（见 DEPLOYMENT §7 / ADR-0005）。
 
 ---
 
@@ -30,7 +30,7 @@
 2. **精排**：对截断后的候选逐对计算 BGE-M3 Cross-Encoder 相关性分数，重排到 top-5
 3. **来源加权**：精排分数叠加场景化来源权重（常见病优先本地指南 0.7/0.3，前沿问题优先文献 0.3/0.7），与问题分类结果联动
 
-**效果**：平均响应 3.2s → 1.2s（串行检索改并行 + 两阶段重排），检索准确率较单库 baseline 提升 27%。
+**效果**：平均响应降至 **1 秒级**（预研自测均值，非严格统计）。可佐证的加速设计：双源检索以 `asyncio.gather` 并行（Docker 版 both 分支一直是并行实现）+ 两阶段重排（粗排 top_k×3 截断，控制 Cross-Encoder 精排量）；检索准确率较单库 baseline 提升 27%。
 
 ---
 
@@ -47,7 +47,9 @@
 | FP16 直接部署 | 28G 显存需求，12G 单卡无法运行 |
 | 蒸馏小模型 | 需要训练数据与算力，预研阶段成本过高；留作后续迭代方向 |
 
-**实现**：加载职责收编于 `src/core/llm.py` 的 `QwenBackend`（懒加载至首次调用），同时支持 GPU（GPTQ 加载）与 CPU（标准 transformers 加载）双模式，架构代码不变，仅加载方式不同。切换后端（真实模型 / 测试用假话务员）只改 `settings.llm_backend`（`qwen` / `fake`），详见 [ADR-0003](adr/0003-llm-service.md)。
+**实现**：加载职责收编于 `src/core/llm.py` 的 `QwenBackend`（懒加载至首次调用），同时支持 GPU（GPTQ 加载）与 CPU/标准（标准 transformers 加载）双模式，架构代码不变，仅加载方式不同。切换后端（真实模型 / 测试用假话务员）只改 `settings.llm_backend`（`qwen` / `fake`），详见 [ADR-0003](adr/0003-llm-service.md)。
+
+> **当前状态（2026-09-08 校准）**：仓库默认 `USE_GPTQ=0`（标准 transformers 加载，本地开发/CI/复现即用）；生产 docker compose 已置 `USE_GPTQ=1` 走 GPTQ INT4（对应 8G 显存预算，权重目录见 DEPLOYMENT §3.1）。若在新机器启用 GPTQ 路径，请先实测 INT4 权重可正常加载再对外宣称该显存指标。
 
 ---
 
@@ -84,4 +86,4 @@
 | 部署与合规（私有化） | 1 | 0.5 | Docker 一键离线部署 |
 | **合计** | **8** | **3.5** | — |
 
-**结论**：落地周期从约 8 周缩短到约 3.5 周，**缩短约 60%**。此为基于选型对比的工程测算，用于支撑框架选型决策，非严格实测数据。
+**结论**：落地周期从约 8 周缩短到约 **3~3.5 周**，测算**缩短约 60%**。此为基于选型对比的工程测算，用于支撑框架选型决策，**非严格实测数据**。
