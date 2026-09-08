@@ -37,6 +37,7 @@ jobs:
           pip install pydantic==2.7.0 pydantic-settings==2.2.0
           pip install loguru==0.7.2 python-dotenv==1.0.1
           pip install pymilvus==2.4.3
+          pip install "marshmallow<4"  # pymilvus 2.4.3 -> environs 依赖旧版 marshmallow API
           pip install python-multipart==0.0.9
           pip install tiktoken==0.7.0 numpy==1.26.4
 

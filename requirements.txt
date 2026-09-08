@@ -11,6 +11,7 @@ pydantic-settings==2.2.0
 
 # --- 向量数据库 (Q20: Milvus 单机版) ---
 pymilvus==2.4.3
+marshmallow<4  # pymilvus 2.4.3 -> environs 依赖旧版 marshmallow API（4.x 移除 __version_info__）
 
 # --- 深度学习 & 模型推理 (Q10: GPTQ INT4量化) ---
 torch==2.2.2
