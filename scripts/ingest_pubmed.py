@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import json
-import time
 import re
 from typing import List, Dict, Optional
 from loguru import logger
@@ -164,52 +163,18 @@ def ingest_pubmed_to_milvus(
     chunks: List[Dict],
     batch_size: int = 100,
 ):
-    """将 PubMed 文献块写入 Milvus"""
-    from sentence_transformers import SentenceTransformer
-    from pymilvus import Collection, connections
+    """将 PubMed 文献块写入检索库（向量化/连接/建表由选中适配器负责）。
 
-    logger.info(f"加载 BGE-M3: {settings.bge_model_path}")
-    model = SentenceTransformer(settings.bge_model_path, device=settings.device)
+    走 src/core/retrieval.get_retriever() 统一入口：两种后端都能灌库，
+    脚本不再自连数据库/自加载模型。
+    """
+    from src.core.retrieval import get_retriever
 
-    connections.connect(
-        alias="default",
-        host=settings.milvus_host,
-        port=settings.milvus_port,
-    )
-    collection = Collection(settings.milvus_collection_pubmed)
-
-    total = len(chunks)
-    inserted = 0
-    start = time.perf_counter()
-
-    for i in range(0, total, batch_size):
-        batch = chunks[i: i + batch_size]
-        texts = [c["text"] for c in batch]
-
-        embeddings = model.encode(
-            texts,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        ).tolist()
-
-        data = [
-            embeddings,
-            texts,
-            [c["metadata"].get("title", "") for c in batch],
-            [c["metadata"].get("department", "") for c in batch],
-            [c["metadata"].get("publish_time", "") for c in batch],
-            [c["metadata"].get("source_type", "pubmed") for c in batch],
-            [c["metadata"].get("doc_id", "") for c in batch],
-        ]
-        collection.insert(data)
-        inserted += len(batch)
-        logger.info(f"导入进度: {inserted}/{total}")
-
-    collection.flush()
-    latency = time.perf_counter() - start
+    retriever = get_retriever()
+    retriever.connect()
+    retriever.insert(settings.milvus_collection_pubmed, chunks, batch_size=batch_size)
     logger.info(
-        f"PubMed导入完成: {inserted} 条 → {settings.milvus_collection_pubmed}, "
-        f"耗时={latency:.1f}s"
+        f"PubMed导入完成: {len(chunks)} 条 → {settings.milvus_collection_pubmed}"
     )
 
 

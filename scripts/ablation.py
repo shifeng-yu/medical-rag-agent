@@ -14,6 +14,11 @@
 #   C. source_weight  —— 场景化来源权重（常见病优先本地/前沿优先文献）
 #   D. custom_chunk   —— 医疗定制分块（在数据摄入侧控制，见下方说明）
 #
+# 【为什么没有第二份流水线】
+#   评测直接调用主工作流 src/core/workflow.py 的 run()，通过
+#   RunOptions 关闭对应环节（use_judge / use_reranker / use_source_weight /
+#   use_session）。评测跑的就是线上同一条链——不再复制 run_single。
+#
 # 【运行方式】（需 GPU + 模型 + MedQA 测试集环境）
 #   python scripts/ablation.py                          # 完整配置
 #   python scripts/ablation.py --disable judge          # 关掉幻觉校验
@@ -25,31 +30,23 @@
 #   1. custom_chunk 发生在数据摄入阶段（ingest），不在在线推理链路。
 #      关闭它 = 用通用分块（chunk_max_tokens=512）重新建库索引后再评测，
 #      本脚本只负责记录该维度，实际由 scripts/ingest_*.py 配合重建。
-#   2. 输出为 JSON + 控制台表格，建议多组配置跑完后人工汇总成对比表。
+#   2. 评测使用评测模式（use_session=False）：不建会话、不写历史，
+#      每条样本独立跑通；非 ok 出口（拦截/降级/error）自动计为未命中。
+#   3. 输出为 JSON + 控制台表格，建议多组配置跑完后人工汇总成对比表。
 # ============================================================
 
 import sys
 import json
-import time
+import asyncio
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 # 确保项目根目录在 path 中（与 run_baseline.py 一致）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from loguru import logger
-from config.settings import settings
-from src.core.classifier import classifier
-from src.core.reranker import reranker
-from src.core.generator import generator
-from src.core.judge import judge
-
-# CPU/GPU 自适应检索器（与 workflow.py 同一套选择逻辑）
-if settings.use_milvus_lite:
-    from src.core.retriever_lite import lite_retriever as retriever
-else:
-    from src.core.retriever import retriever
+from src.core.workflow import workflow, RunOptions
 
 
 # ============================================================
@@ -72,6 +69,15 @@ class AblationConfig:
         self.use_reranker = use_reranker
         self.use_source_weight = use_source_weight
         self.use_custom_chunk = use_custom_chunk
+
+    def to_options(self) -> RunOptions:
+        """映射为主工作流的环节开关（custom_chunk 在摄入侧，不在此表）"""
+        return RunOptions(
+            use_judge=self.use_judge,
+            use_reranker=self.use_reranker,
+            use_source_weight=self.use_source_weight,
+            use_session=False,  # 评测模式：不建会话、不写历史
+        )
 
     def describe(self) -> str:
         """生成配置的人类可读描述"""
@@ -102,72 +108,7 @@ def build_configs(disabled: List[str]) -> List[AblationConfig]:
 
 
 # ============================================================
-# 单条样本跑一遍 RAG 管线（模块可开关）
-# ============================================================
-
-async def run_single(
-    query: str,
-    cfg: AblationConfig,
-) -> Dict:
-    """
-    对单条 query 执行消融版 RAG 管线。
-    与 src/core/workflow.py 的完整链路保持一致，仅按配置跳过指定模块。
-    """
-    t0 = time.time()
-
-    # 1. 问题分类（L1 关键词规则 + L2 大模型兜底）—— 全配置共用
-    classification = classifier.classify(query)
-
-    # 2. 双源并行检索（本地知识库 + PubMed）—— 全配置共用
-    local_results, pubmed_results, _ = await retriever.retrieve(query, classification)
-
-    # 3. 重排序（可消融）
-    if cfg.use_reranker:
-        if cfg.use_source_weight:
-            # 场景化来源权重：常见病优先本地指南、前沿问题优先文献
-            source_weights = classifier.get_source_weight(query, classification)
-        else:
-            # 无来源权重：退化为两库等权
-            source_weights = (0.5, 0.5)
-        reranked = reranker.rerank(
-            query, local_results, pubmed_results,
-            source_weights=source_weights,
-        )
-    else:
-        # 无重排：直接拼接两库结果（按原始检索顺序）
-        reranked = (local_results + pubmed_results)[: settings.rerank_top_k]
-
-    # 4. 拼装上下文
-    context_text = reranker.build_context_text(reranked)
-
-    # 5. 答案生成（Qwen-14B GPTQ INT4）
-    answer, _ = generator.generate(query=query, context_text=context_text)
-
-    # 6. 幻觉校验（可消融）
-    judge_result = {}
-    if cfg.use_judge:
-        passed, judge_result, _ = judge.validate(
-            query=query,
-            answer=answer,
-            retrieved_contexts=reranked,
-            trigger_high_judge=classifier.should_trigger_high_judge(query),
-        )
-        if not passed:
-            # 校验未通过：按完整链路逻辑重试一次（简化：直接标记未通过）
-            judge_result["passed"] = False
-    else:
-        judge_result["passed"] = True  # 无校验 = 默认放行（这是消融对照组）
-
-    return {
-        "query": query,
-        "answer": answer,
-        "judge_result": judge_result,
-        "latency_ms": (time.time() - t0) * 1000,
-    }
-
-
-# ============================================================
-# 测试集评测
+# 测试集评测（直接跑主工作流，不再复制 RAG 链）
 # ============================================================
 
 def evaluate(
@@ -175,26 +116,47 @@ def evaluate(
     cfg: AblationConfig,
     max_samples: Optional[int] = None,
 ) -> Dict:
-    """在 MedQA 测试集上评测单组配置"""
-    import asyncio
+    """在 MedQA 测试集上评测单组配置。
 
+    每条样本以评测模式（use_session=False）跑主工作流 run()，
+    命中口径与 run_baseline.py 一致：标准答案出现在生成结果中即命中。
+    非 ok 出口（急症/敏感拦截、降级、error）不产生有效回答 → 自动未命中，
+    并在 outcome 字段中如实记录，便于事后分析哪类样本被链路拦下。
+    """
     samples = test_data[:max_samples] if max_samples else test_data
     correct = 0
     latencies = []
     details = []
+    outcome_counts: Dict[str, int] = {}
 
     for i, item in enumerate(samples):
         query = item.get("question", "")
         expected = item.get("answer", "")
 
         try:
-            result = asyncio.run(run_single(query, cfg))
+            # 直接调用主工作流（与线上同一条链），评测模式关闭会话副作用
+            result = asyncio.run(workflow.run(
+                query, session_id=None, options=cfg.to_options(),
+            ))
             latencies.append(result["latency_ms"])
 
-            # 评测口径：标准答案出现在生成结果中即命中（与 run_baseline.py 一致）
-            hit = bool(expected and expected in result["answer"])
+            # 出口分类统计（ok / emergency_blocked / degraded / error ...）
+            outcome_kind = result.get("outcome", "ok")
+            outcome_counts[outcome_kind] = outcome_counts.get(outcome_kind, 0) + 1
+
+            # 命中口径：仅当链路完整跑通（ok 出口）且标准答案出现在回答中
+            hit = bool(
+                outcome_kind == "ok"
+                and expected
+                and expected in result["answer"]
+            )
             correct += 1 if hit else 0
-            details.append({"query": query, "expected": expected, "hit": hit})
+            details.append({
+                "query": query,
+                "expected": expected,
+                "hit": hit,
+                "outcome": outcome_kind,
+            })
 
         except Exception as e:
             logger.error(f"样本失败 [{i}]: {e}")
@@ -211,6 +173,7 @@ def evaluate(
         "top1_accuracy": round(correct / total, 4) if total else 0.0,
         "avg_latency_ms": round(sum(latencies) / len(latencies), 2) if latencies else 0.0,
         "correct": correct,
+        "outcome_counts": outcome_counts,
     }
 
 
