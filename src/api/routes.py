@@ -16,9 +16,44 @@ from src.api.schemas import (
     JudgeResult,
 )
 from src.core.workflow import workflow
+from src.core import outcome
 from src.monitoring.logger import request_logger
 
 router = APIRouter(prefix="/api/v1", tags=["medical-rag"])
+
+
+def _build_query_response(result: dict) -> QueryResponse:
+    """把问诊结果出口模块产出的固定 6 键形状（含 outcome 出口标记）映射为响应模型。
+
+    显式逐字段映射（不做 **splat 展开）：即使未来结果 dict 新增键，
+    单条 / 批量路由也不会因此崩掉。
+    """
+    sources = [
+        SourceInfo(
+            title=s.get("title", ""),
+            source=s.get("source", ""),
+            score=s.get("score", 0),
+            publish_time=s.get("publish_time", ""),
+            department=s.get("department", ""),
+            authority_tier=s.get("authority_tier", ""),
+            authority_label=s.get("authority_label", ""),
+        )
+        for s in result.get("sources", [])
+    ]
+    judge_data = result.get("judge_result", {}) or {}
+    judge_result = JudgeResult(
+        layer=judge_data.get("layer", "unknown"),
+        scores=judge_data.get("scores"),
+        reason=judge_data.get("reason") or judge_data.get("feedback"),
+        details=judge_data.get("details"),
+    )
+    return QueryResponse(
+        answer=result["answer"],
+        sources=sources,
+        judge_result=judge_result,
+        latency_ms=result["latency_ms"],
+        session_id=result["session_id"],
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -28,13 +63,8 @@ async def health_check():
     """
     milvus_ok = False
     try:
-        from config.settings import settings
-        if settings.use_milvus_lite:
-            from src.core.retriever_lite import lite_retriever
-            lite_retriever.connect()
-        else:
-            from src.core.retriever import retriever
-            retriever.connect()
+        from src.core.retrieval import get_retriever
+        get_retriever().connect()
         milvus_ok = True
     except Exception:
         pass
@@ -71,40 +101,23 @@ async def chat(req: QueryRequest):
         )
     except asyncio.TimeoutError:
         logger.error(f"[API] 请求超时: {req.query[:60]}")
-        result = graceful.timeout_response()
+        result = outcome.degrade(
+            req.session_id or "anonymous",
+            outcome.EXIT_TIMEOUT,
+            graceful.timeout_message(),
+        )
     except Exception as e:
         logger.error(f"[API] 工作流执行异常: {e}")
-        result = graceful.overload_response()
+        result = outcome.degrade(
+            req.session_id or "anonymous",
+            outcome.EXIT_OVERLOAD,
+            graceful.overload_message(),
+            reason=str(e),
+        )
     finally:
         rate_limiter.release(user_id)
 
-    # 构建响应
-    sources = [
-        SourceInfo(
-            title=s.get("title", ""),
-            source=s.get("source", ""),
-            score=s.get("score", 0),
-            publish_time=s.get("publish_time", ""),
-            department=s.get("department", ""),
-        )
-        for s in result.get("sources", [])
-    ]
-
-    judge_data = result.get("judge_result", {})
-    judge_result = JudgeResult(
-        layer=judge_data.get("layer", "unknown"),
-        scores=judge_data.get("scores"),
-        reason=judge_data.get("reason") or judge_data.get("feedback"),
-        details=judge_data.get("details"),
-    )
-
-    return QueryResponse(
-        answer=result["answer"],
-        sources=sources,
-        judge_result=judge_result,
-        latency_ms=result["latency_ms"],
-        session_id=result["session_id"],
-    )
+    return _build_query_response(result)
 
 
 @router.post("/chat/batch", response_model=List[QueryResponse])
@@ -117,17 +130,7 @@ async def batch_chat(req: BatchQueryRequest):
                 query=item.query,
                 session_id=item.session_id,
             )
-            results.append(QueryResponse(
-                answer=result["answer"],
-                sources=[
-                    SourceInfo(**s) for s in result.get("sources", [])
-                ],
-                judge_result=JudgeResult(
-                    **(result.get("judge_result", {"layer": "unknown"}))
-                ),
-                latency_ms=result["latency_ms"],
-                session_id=result["session_id"],
-            ))
+            results.append(_build_query_response(result))
         except Exception as e:
             logger.error(f"[API] 批量处理异常: {e}")
             results.append(QueryResponse(

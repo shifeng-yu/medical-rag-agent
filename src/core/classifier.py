@@ -9,6 +9,7 @@ from typing import Tuple, Optional
 from loguru import logger
 from config.settings import settings
 from src.utils.helpers import match_keywords, load_keywords, load_prompt_template
+from src.core.llm import get_llm
 
 
 class QueryClassifier:
@@ -29,16 +30,6 @@ class QueryClassifier:
             f"问题分类器已初始化: {len(self.diseases)} 疾病词, "
             f"{len(self.drugs)} 药品词"
         )
-        self._llm = None  # 延迟加载
-
-    @property
-    def llm_pipeline(self):
-        """懒加载 Qwen 做分类 ( <100ms)"""
-        if self._llm is None:
-            # 使用轻量调用，不需要完整模型加载
-            from src.core.generator import classify_with_llm
-            self._llm = classify_with_llm
-        return self._llm
 
     def classify(self, query: str) -> str:
         """
@@ -84,7 +75,8 @@ class QueryClassifier:
         prompt = prompt_template.replace("{query}", query)
 
         try:
-            result = self.llm_pipeline(prompt, max_tokens=10).strip()
+            # L2 分类走 LLM 总机（任务 classify，采样参数由任务表管理）
+            result = get_llm().complete("classify", prompt).strip()
             if "文献" in result:
                 return "pubmed"
             else:

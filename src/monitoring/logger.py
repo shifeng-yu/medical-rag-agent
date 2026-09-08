@@ -26,6 +26,9 @@ class RequestMetrics:
         self.judge_scores: Dict[str, float] = {}
         self.judge_passed: bool = False
         self.success: bool = False
+        # 问诊回合出口（由 outcome 模块按出口种类填写）：
+        # ok / emergency_blocked / content_blocked / degraded / error / overload / timeout
+        self.outcome: str = ""
         self.final_output: str = ""
         self.retry_count: int = 0
         self.error_message: str = ""
@@ -44,6 +47,7 @@ class RequestMetrics:
             "judge_scores": self.judge_scores,
             "judge_passed": self.judge_passed,
             "success": self.success,
+            "outcome": self.outcome,
             "retry_count": self.retry_count,
             "error": self.error_message,
         }
@@ -63,7 +67,9 @@ class RequestLogger:
         self.stats_path = self.log_dir / "stats_summary.json"
 
         # 内存统计计数器
-        self._lock = threading.Lock()
+        # RLock: _flush() 持锁期间会调用 get_stats() 再次加锁，必须可重入
+        #（threading.Lock 会导致死锁——历史隐患：buffer 满 50 或 shutdown flush 时才触发）
+        self._lock = threading.RLock()
         self._total_requests: int = 0
         self._total_success: int = 0
         self._total_judge_passed: int = 0

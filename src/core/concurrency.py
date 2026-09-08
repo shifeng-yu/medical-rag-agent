@@ -72,31 +72,25 @@ class RateLimiter:
 
 
 class GracefulDegradation:
-    """Graceful degradation under overload."""
+    """Graceful degradation under overload.
+
+    只负责产出面向用户的降级文案；响应形状（固定 6 键，含 outcome 出口标记）
+    由问诊结果出口模块（src/core/outcome.py）统一拼装。
+    """
 
     @staticmethod
-    def overload_response():
-        return {
-            "answer": (
-                "抱歉，当前服务请求量较大，暂时无法处理您的问诊。\n"
-                "建议您稍后重试，或前往正规医疗机构咨询专业医生。"
-            ),
-            "sources": [],
-            "judge_result": {"layer": "overload"},
-            "latency_ms": 0,
-        }
+    def overload_message() -> str:
+        return (
+            "抱歉，当前服务请求量较大，暂时无法处理您的问诊。\n"
+            "建议您稍后重试，或前往正规医疗机构咨询专业医生。"
+        )
 
     @staticmethod
-    def timeout_response():
-        return {
-            "answer": (
-                "抱歉，处理您的请求超时。请尝试简化问题后重试。\n"
-                "如需紧急医疗帮助，请立即前往医院就诊。"
-            ),
-            "sources": [],
-            "judge_result": {"layer": "timeout"},
-            "latency_ms": 0,
-        }
+    def timeout_message() -> str:
+        return (
+            "抱歉，处理您的请求超时。请尝试简化问题后重试。\n"
+            "如需紧急医疗帮助，请立即前往医院就诊。"
+        )
 
 
 # Global instances

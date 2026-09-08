@@ -16,7 +16,9 @@ from typing import Dict, List, Optional
 AUTHORITY_TIERS = {
     "tier_1": {
         "label": "临床指南",
-        "sources": ["国家卫健委", "中华医学会", "中国临床指南", "NMPA", "FDA", "WHO"],
+        # "指南"作为通用兜底 marker：诊治指南/防治指南/康复指南/用药指南等
+        # 均属 Tier1 临床指南；特定机构 marker 优先列前面保持可读性。
+        "sources": ["国家卫健委", "中华医学会", "中国临床指南", "NMPA", "FDA", "WHO", "指南"],
         "confidence": 0.95,
         "priority": 1,
     },

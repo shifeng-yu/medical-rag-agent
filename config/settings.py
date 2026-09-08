@@ -19,11 +19,17 @@ class Settings(BaseSettings):
     qwen_model_path: str = os.getenv("QWEN_MODEL_PATH", "/models/Qwen-14B-Chat-GPTQ-Int4")
     bge_model_path: str = os.getenv("BGE_MODEL_PATH", "/models/bge-m3")
 
+    # ========== LLM 对话总机 ==========
+    # qwen: 真实模型后端；fake: 确定性假话务员（测试/CI/演示，不加载模型）
+    llm_backend: str = os.getenv("LLM_BACKEND", "qwen")
+
     # ========== 设备配置 ( GPU优先，CPU fallback) ==========
     device: str = os.getenv("DEVICE", "cuda" if os.getenv("FORCE_CPU", "0") == "0" else "cpu")
     max_gpu_memory: int = 10  # GB, 量化后模型总占用 <10G
     use_gptq: bool = False  # CPU模式不使用GPTQ，加载标准transformers模型
-    use_milvus_lite: bool = True  # CPU模式用Milvus Lite嵌入式，无需Docker
+    use_milvus_lite: bool = os.getenv("USE_MILVUS_LITE", "1").lower() in (
+        "1", "true", "yes", "on"
+    )  # 0/false → Docker Milvus（生产/docker compose）；1/true → 嵌入式 Lite（本地开发/CI）
 
     # ========== Milvus 向量库 ( 单机版, 两个Collection, 1024维) ==========
     milvus_host: str = os.getenv("MILVUS_HOST", "localhost")

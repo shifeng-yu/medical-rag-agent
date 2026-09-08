@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="nxKfAWH0ZPKGePgmL6ETui">
+<head data-page-node-id="VORDDquJddPjneNEQgM1KA">
+<meta charset="UTF-8" data-page-node-id="1lNpLwLr2kmCgNgttp3RMA">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="7YG8iRpUiLR4BmeqvDGCTH">
+<title>全科医疗问诊 RAG · 管理台</title>
+<style>
+  :root{
+    --brand:#0e7a8a; --brand-dark:#0a5c68; --bg:#f2f6f7; --card:#ffffff;
+    --line:#dde7ea; --text:#1c2b30; --muted:#5d737a;
+    --ok:#1a9c6e; --warn:#c98a12; --err:#c0392b; --user:#e3f2f5; --ai:#ffffff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{font:14px/1.6 "PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column}
+  header{background:linear-gradient(90deg,var(--brand-dark),var(--brand)); color:#fff; padding:10px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+  header h1{font-size:17px; font-weight:600; letter-spacing:.5px}
+  header .sub{font-size:12px; opacity:.85}
+  header .tag{margin-left:auto; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:12px; padding:2px 10px; font-size:12px}
+  .disclaimer{background:#fff7e0; color:#7a5b10; font-size:12px; padding:5px 18px; border-bottom:1px solid #f0e3b8}
+  main{flex:1; display:flex; min-height:0}
+  /* ===== 左侧：知识库 ===== */
+  aside{width:340px; min-width:280px; background:var(--card); border-right:1px solid var(--line); display:flex; flex-direction:column; overflow:hidden}
+  .panel-h{padding:10px 14px; border-bottom:1px solid var(--line); font-size:13px; font-weight:600; color:var(--brand-dark); display:flex; align-items:center; gap:6px}
+  .panel-b{padding:12px 14px; overflow-y:auto; flex:1}
+  section{margin-bottom:18px}
+  section h3{font-size:13px; color:var(--muted); margin-bottom:8px; font-weight:600; display:flex; align-items:center; gap:6px}
+  .hint{font-size:12px; color:var(--muted)}
+  .btn{display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; background:var(--brand); color:#fff; transition:.15s}
+  .btn:hover{background:var(--brand-dark)}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+  .btn.ghost{background:#fff; color:var(--brand-dark); border:1px solid var(--brand)}
+  .btn.danger{background:#fff; color:var(--err); border:1px solid #e6b8b2}
+  .btn.danger:hover{background:#fdf1ef}
+  .btn.sm{padding:3px 9px; font-size:12px; border-radius:6px}
+  input[type=text],input[type=file],textarea{border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; width:100%; background:#fff; color:var(--text)}
+  input:focus,textarea:focus{outline:2px solid #9ed3db; border-color:var(--brand)}
+  .file-zone{border:1.5px dashed #b9cfd5; border-radius:10px; padding:12px; text-align:center; color:var(--muted); font-size:12px; cursor:pointer; background:#f8fbfc}
+  .file-zone:hover{border-color:var(--brand); color:var(--brand-dark)}
+  .file-list{margin-top:8px; font-size:12px; color:var(--text)}
+  .file-list div{padding:2px 0; display:flex; justify-content:space-between; gap:8px; word-break:break-all}
+  .row{margin:8px 0}
+  .dep-item{border:1px solid var(--line); border-radius:10px; margin-bottom:10px; overflow:hidden}
+  .dep-head{background:#f2f8f9; padding:7px 12px; font-weight:600; font-size:13px; display:flex; justify-content:space-between; color:var(--brand-dark)}
+  .dep-head .cnt{color:var(--muted); font-weight:400; font-size:12px}
+  .doc{border-top:1px solid #eef4f5; padding:7px 12px; display:flex; align-items:center; gap:8px; font-size:12.5px}
+  .doc .name{flex:1; word-break:break-all; color:var(--text)}
+  .doc .meta{color:var(--muted); font-size:11px; white-space:nowrap}
+  .task{font-size:12px; padding:5px 0; border-bottom:1px dashed #edf2f3; display:flex; gap:8px; align-items:baseline}
+  .task .st{font-size:11px; padding:1px 8px; border-radius:10px}
+  .st.done{background:#e2f5ec; color:var(--ok)} .st.processing{background:#e8f1fd; color:#1e5fb0}
+  .st.error{background:#fde9e6; color:var(--err)}
+  .empty{color:var(--muted); font-size:12px; text-align:center; padding:18px 0}
+  /* ===== 右侧：对话 ===== */
+  section.chat-wrap{flex:1; display:flex; flex-direction:column; min-width:0}
+  #msgs{flex:1; overflow-y:auto; padding:18px 6%; display:flex; flex-direction:column; gap:14px}
+  .msg{max-width:76%; display:flex; flex-direction:column}
+  .msg.user{align-self:flex-end; align-items:flex-end}
+  .msg.ai{align-self:flex-start; align-items:flex-start}
+  .bubble{padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.75; white-space:pre-wrap; word-break:break-word}
+  .user .bubble{background:var(--user); border-top-right-radius:4px}
+  .ai .bubble{background:var(--ai); border:1px solid var(--line); border-top-left-radius:4px; box-shadow:0 1px 3px rgba(20,60,70,.05)}
+  .who{font-size:11px; color:var(--muted); margin:4px 6px}
+  .src{width:100%; margin-top:6px}
+  .src summary{font-size:12px; color:var(--brand-dark); cursor:pointer; background:#f2f8f9; padding:5px 10px; border-radius:8px; border:1px solid var(--line)}
+  .src table{width:100%; border-collapse:collapse; font-size:12px; margin-top:4px}
+  .src td,.src th{border-bottom:1px solid #eef4f5; padding:4px 8px; text-align:left; vertical-align:top}
+  .judge{display:inline-block; font-size:11px; border-radius:10px; padding:1px 8px; margin-top:6px; border:1px solid var(--line)}
+  .judge.ok{background:#e2f5ec; color:var(--ok); border-color:#b9e3d2}
+  .judge.degraded{background:#fff6e3; color:var(--warn); border-color:#ecd9a8}
+  .judge.error{background:#fde9e6; color:var(--err); border-color:#ecc9c4}
+  .typing{color:var(--muted); font-size:12px; padding:4px 2px}
+  .typing i{display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--muted); margin:0 2px; animation:blink 1s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  .composer{border-top:1px solid var(--line); background:var(--card); padding:12px 6%}
+  .composer .box{display:flex; gap:10px; align-items:flex-end; border:1px solid var(--line); border-radius:14px; padding:8px 10px; background:#fff}
+  #q{flex:1; border:none; resize:none; max-height:120px; padding:6px 4px; font-size:14px; background:transparent}
+  #q:focus{outline:none}
+  .composer .hint{text-align:right; margin-top:6px}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#1c2b30; color:#fff; padding:9px 18px; border-radius:20px; font-size:13px; opacity:0; pointer-events:none; transition:.25s; z-index:99}
+  .toast.show{opacity:.95}
+  @media (max-width:900px){main{flex-direction:column} aside{width:100%; border-right:none; border-bottom:1px solid var(--line); max-height:42vh} .msg{max-width:92%}}
+</style>
+</head>
+<body data-page-node-id="5dCxG6gUqDzXSzUDappXa7">
+<header data-page-node-id="O7MPESOpCnABHeHOKxLmQ3">
+  <h1 data-page-node-id="xYSsZxCE8EMRfmno8ESBhO">全科医疗问诊 RAG 智能助手</h1>
+  <span class="sub" data-page-node-id="qSuIxmgwvrNA7M43VF3TZ0">RAGFlow 蓝本 · Qwen-14B INT4 · BGE-M3 · Milvus · 全链路本地</span>
+  <span class="tag" data-page-node-id="ZI30IeFzQSQCJh31vN5umz">collection: local_kb</span>
+</header>
+<div class="disclaimer" data-page-node-id="aGaplV6vS4dVxWaBUMXSp0">⚠️ 本系统输出仅作医学科普参考，不构成诊疗建议；急症请立即就医。</div>
+
+<main data-page-node-id="6Y2dMoUGGahE2XXZZT9965">
+  <!-- ======== 左：知识库 ======== -->
+  <aside data-page-node-id="gAMzoeeu8hxyPhSwONnmdQ">
+    <div class="panel-h" data-page-node-id="dYB00FfUQJAjubMdtDnUqA">📚 知识库管理 <span class="hint" data-page-node-id="C1zozzvjI7LXaN6SMGhCG4">（local_kb · 网页上传/删除/替换）</span></div>
+    <div class="panel-b" data-page-node-id="Ry55JrYzDfA7aWoxihiWWV">
+      <section data-page-node-id="gLCQLDlJTKa0jFb3u8Efrz">
+        <h3 data-page-node-id="p8TLezShzlE9RPhxlWHlvB">⬆️ 上传文档</h3>
+        <div class="file-zone" id="fileZone" data-page-node-id="2YCCAaUBp9gDbgiNbCsklP">点击选择文件（.md / .txt / .json，≤50MB，可多选）</div>
+        <input type="file" id="files" accept=".md,.txt,.json" multiple hidden data-page-node-id="dODcB5lFHXrJjE1GgfVxce">
+        <div class="file-list" id="fileList" data-page-node-id="zJcp2Yfo10ti1gIOkgxxL8"></div>
+        <div class="row" data-page-node-id="ZukSLuEzmFb0ICdUTpN6EQ">
+          <label class="hint" data-page-node-id="BA56lHoqotV0GsQbI4sKaY">科室 / 主题标签（决定落盘目录与元数据）</label>
+          <input type="text" id="department" list="deptList" value="神经内科" maxlength="32" data-page-node-id="owXLzkhluBSDXeNYruwwdE">
+          <datalist id="deptList" data-page-node-id="La78R0qNB7ipBLEcLpzylx">
+            <option value="通用" data-page-node-id="7GpqstlDYad65UyCSPLu5w"></option><option value="心内科" data-page-node-id="cF4EKTjI7C7uZyuyE8afBt"></option><option value="神经内科" data-page-node-id="1tN18u2oLaOFEJpOVjD3wR"></option>
+            <option value="呼吸内科" data-page-node-id="1GpO5m8FhHgyZD5shKvESP"></option><option value="消化内科" data-page-node-id="AqDyPp8zkuFpXXpSNcYRN0"></option><option value="内分泌科" data-page-node-id="mALPASEnwR4pSnMhVwgDkv"></option>
+            <option value="骨科" data-page-node-id="301qavEaZeBYjh0uC91hgI"></option><option value="儿科" data-page-node-id="z9IADNChUg3cYDh1CsUauD"></option><option value="皮肤科" data-page-node-id="Cn09uuaYekFHdBRaC1LOJm"></option>
+          </datalist>
+        </div>
+        <button class="btn" id="uploadBtn" style="width:100%" data-page-node-id="WvWBk004eACZHdNvxEcVsI">上传并灌入库</button>
+        <div class="hint" style="margin-top:6px" data-page-node-id="eXwACnr5fFc2AT7GFlnLNV">同名同科室文件重传 = <b data-page-node-id="dUZwHeqaArwwEzTtAoMrIw">替换</b>（先删旧向量再重灌），不会重复累积。</div>
+      </section>
+
+      <section data-page-node-id="Jt0wiT1glgvhdOVPmjpmqH">
+        <h3 data-page-node-id="8I1nBrvG0zp9ZwHFnCCgw6">🗂️ 已入库文档 <button class="btn ghost sm" id="refreshBtn" style="margin-left:auto" data-page-node-id="X21h9vMOFaSiGzFtb8R6Mh">刷新</button></h3>
+        <div id="docTree" data-page-node-id="TyjaHdMc6M3sgHxq8VNJQq"><div class="empty" data-page-node-id="WSx9bA7nJGHL62SKE16k72">加载中…</div></div>
+      </section>
+
+      <section data-page-node-id="0y7pM7i7I886jxkVTPBe71">
+        <h3 data-page-node-id="xt3LWpk57rKLZxalSbCBAZ">🕒 最近灌库任务</h3>
+        <div id="tasks" data-page-node-id="SpleLBChaK3FP1CZIW5PC5"><div class="empty" data-page-node-id="eWyArRTSGMA2E6Cl0HBlJg">暂无任务</div></div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ======== 右：对话 ======== -->
+  <section class="chat-wrap" data-page-node-id="pBcNCnw0WqgIncsH3AhcjO">
+    <div id="msgs" data-page-node-id="semVgCHgfO1mmAG7fcGCAo">
+      <div class="msg ai" data-page-node-id="Itve32SvXyslkZMo2XWIHT"><div class="bubble" data-page-node-id="jwtmI8NyChnDgjISpyaJme">你好，我是全科医疗问诊助手（私有化部署，数据不出域）。请描述你的症状或健康问题，我会结合右侧知识库给出科普参考。<br data-page-node-id="Qdf10B3RpVV6EAJnMCDNuY"><br data-page-node-id="hi56ZgNeCHRzEaUdyEgwjG">使用前请先到左侧上传你的科室文档（如医疗指南 / Q&amp;A 问答 json），检索会优先命中刚灌入的内容。</div></div>
+    </div>
+    <div class="composer" data-page-node-id="naODBSKAcQfkz3i4kyQkSj">
+      <div class="box" data-page-node-id="6IdxRWvE1YTEPY5vbYIfnB">
+        <textarea id="q" rows="1" placeholder="输入健康问题，Enter 发送，Shift+Enter 换行…"></textarea>
+        <button class="btn" id="sendBtn" data-page-node-id="mRNy5Aog2RMaixIProBMm9">发送</button>
+      </div>
+      <div class="hint" data-page-node-id="iotjlp1takfzex71xEDsFs">模型推理较慢（本地 Qwen-14B），单轮约 10~60s，请勿重复提交 · <a href="javascript:void(0)" id="newSession" style="color:var(--brand-dark)" data-page-node-id="YmPFDjLgDQJnCXS08Sf3kc">新会话</a></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" data-page-node-id="ZrQkNkhPViizaYatfs5BUD"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let sessionId = null;
+const KB = "local_kb";
+
+/* ---------- 通用 ---------- */
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600); }
+async function api(url, opt){
+  const r = await fetch(url, opt);
+  if(!r.ok){
+    let d="请求失败("+r.status+")";
+    try{ d=(await r.json()).detail || d; }catch(e){}
+    throw new Error(typeof d==="string"?d:JSON.stringify(d));
+  }
+  return r.json();
+}
+function fmtSize(b){ if(b<1024) return b+"B"; if(b<1048576) return (b/1024).toFixed(1)+"KB"; return (b/1048576).toFixed(1)+"MB"; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ---------- 上传 ---------- */
+const zone=$("#fileZone"), fileInput=$("#files"), fileListEl=$("#fileList");
+let chosen=[];
+zone.onclick=()=>fileInput.click();
+fileInput.onchange=()=>{
+  chosen=[...fileInput.files];
+  fileListEl.innerHTML = chosen.map(f=>`<div><span>📄 ${esc(f.name)}</span><span>${fmtSize(f.size)}</span></div>`).join("") || "";
+};
+$("#uploadBtn").onclick=async function(){
+  const btn=this;
+  if(!chosen.length) return toast("请先选择文件");
+  if(!/^[\w\u4e00-\u9fff-]{1,32}$/.test($("#department").value.trim())) return toast("科室标签仅限中文/字母/数字/_/-（≤32字符）");
+  const dep=$("#department").value.trim();
+  const fd=new FormData();
+  chosen.forEach(f=>fd.append("files", f));
+  fd.append("department", dep); fd.append("collection", KB);
+  btn.disabled=true; btn.textContent="上传中…";
+  try{
+    const res=await api("/api/v1/documents/upload",{method:"POST",body:fd});
+    toast(`已受理 ${res.accepted_files} 个文件，后台灌库中…`);
+    pollTask(res.task_id);
+    fileInput.value=""; chosen=[]; fileListEl.innerHTML="";
+  }catch(e){ toast("上传失败："+e.message); }
+  finally{ btn.disabled=false; btn.textContent="上传并灌入库"; }
+};
+
+function pollTask(taskId){
+  const timer=setInterval(async()=>{
+    try{
+      const t=await api("/api/v1/documents/tasks/"+taskId);
+      renderTasks();
+      if(t.status==="done"){ clearInterval(timer); toast(`灌库完成：${t.chunks} 块入库`); refreshDocs(); }
+      else if(t.status==="error"){ clearInterval(timer); toast("灌库失败："+(t.errors||[]).join("；")); refreshDocs(); }
+    }catch(e){ clearInterval(timer); }
+  }, 1500);
+}
+
+/* ---------- 文档列表 ---------- */
+async function refreshDocs(){
+  try{
+    const d=await api("/api/v1/documents?collection="+KB);
+    const groups={};
+    d.files.forEach(f=>{
+      const parts=f.path.split("/");
+      const dep=parts.length>1?parts[0]:"(根)";
+      (groups[dep]=groups[dep]||[]).push(f);
+    });
+    const deps=Object.keys(groups).sort();
+    const el=$("#docTree");
+    if(!deps.length){ el.innerHTML='<div class="empty">知识库为空，上传你的第一篇文档吧</div>'; }
+    else el.innerHTML=deps.map(dep=>`
+      <div class="dep-item">
+        <div class="dep-head"><span>${esc(dep)}</span><span class="cnt">${groups[dep].length} 篇</span></div>
+        ${groups[dep].map(f=>{
+          const name=f.path.split("/").pop();
+          const docId=name.replace(/\.(md|txt|json)$/i,"");
+          return `<div class="doc"><span class="name">📄 ${esc(name)}</span>
+            <span class="meta">${fmtSize(f.size)}</span>
+            <button class="btn danger sm" onclick="delDoc('${esc(docId)}','${esc(dep)}')">删除</button></div>`;
+        }).join("")}
+      </div>`).join("");
+  }catch(e){ $("#docTree").innerHTML=`<div class="empty">加载失败：${esc(e.message)}</div>`; }
+}
+async function delDoc(docId, dep){
+  if(!confirm(`确定删除「${docId}」？\n将同时清除该文档的 ${dep} 目录下文件与全部向量。`)) return;
+  try{
+    const r=await api(`/api/v1/documents/${encodeURIComponent(docId)}?department=${encodeURIComponent(dep)}&collection=${KB}`,{method:"DELETE"});
+    toast(`已删除：${r.deleted_vectors} 条向量 / ${r.deleted_files} 个文件`);
+    refreshDocs();
+  }catch(e){ toast("删除失败："+e.message); }
+}
+async function renderTasks(){
+  try{
+    const ts=await api("/api/v1/documents/tasks?limit=6");
+    $("#tasks").innerHTML = ts.length ? ts.map(t=>`
+      <div class="task"><span class="st ${t.status}">${t.status==="processing"?"灌库中":t.status==="done"?`完成·${t.chunks}块`:"失败"}</span>
+      <span>${esc(t.department)} · ${t.files} 文件</span><span class="hint" style="margin-left:auto">${esc((t.finished_at||t.created_at||"").slice(5,16))}</span></div>`).join("")
+      : '<div class="empty">暂无任务</div>';
+  }catch(e){}
+}
+$("#refreshBtn").onclick=()=>{ refreshDocs(); renderTasks(); };
+
+/* ---------- 对话 ---------- */
+function judgeTag(j){
+  if(!j) return "";
+  const map={both:"✔ 双校验通过",rule:"✔ 规则通过",judge:"✔ LLM-Judge 通过",degraded:"降级输出",timeout:"超时降级",error:"异常降级"};
+  const cls=(j.layer==="both"||j.layer==="rule"||j.layer==="judge")?"ok":(j.layer==="degraded"?"degraded":"error");
+  const txt=map[j.layer]||j.layer;
+  const extra=j.reason?` · ${esc(j.reason)}`:"";
+  return `<span class="judge ${cls}">${txt}${extra}</span>`;
+}
+function addMsg(role, html){ const m=document.createElement("div"); m.className="msg "+role; m.innerHTML=html; $("#msgs").appendChild(m); $("#msgs").scrollTop=1e9; }
+function addSrc(srcs, layer){
+  if(!srcs||!srcs.length) return "";
+  const rows=srcs.map(s=>`<tr><td>${esc(s.title||"-")}</td><td>${esc(s.source)}</td><td>${esc(s.department||"-")}</td><td>${Number(s.score||0).toFixed(3)}</td></tr>`).join("");
+  return `<div class="src"><details><summary>📎 引用来源（${srcs.length}）${layer?` · ${layer.replace("_"," ")}`:"   "}</summary>
+    <table><tr><th>标题</th><th>来源</th><th>科室</th><th>分数</th></tr>${rows}</table></details></div>`;
+}
+async function send(){
+  const q=$("#q").value.trim();
+  if(!q) return;
+  $("#q").value=""; $("#sendBtn").disabled=true;
+  addMsg("user", `<div class="bubble">${esc(q)}</div>`);
+  const typing=document.createElement("div"); typing.className="msg ai"; typing.innerHTML=`<div class="bubble">回答生成中<i></i><i></i><i></i></div><span class="typing" style="margin-left:6px">本地 Qwen-14B 推理，约 10~60s…</span>`;
+  $("#msgs").appendChild(typing); $("#msgs").scrollTop=1e9;
+  try{
+    const t0=Date.now();
+    const r=await api("/api/v1/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q, session_id:sessionId})});
+    sessionId=r.session_id||sessionId;
+    const sec=((Date.now()-t0)/1000).toFixed(1);
+    typing.outerHTML=`<div class="msg ai"><div class="bubble">${esc(r.answer)}</div>
+      ${judgeTag(r.judge_result)}
+      ${addSrc(r.sources)}
+      <span class="who">⏱ ${sec}s · session ${esc((r.session_id||"").slice(0,8))}</span></div>`;
+  }catch(e){
+    typing.outerHTML=`<div class="msg ai"><div class="bubble" style="color:var(--err)">请求失败：${esc(e.message)}</div></div>`;
+  }
+  $("#sendBtn").disabled=false; $("#msgs").scrollTop=1e9;
+}
+$("#sendBtn").onclick=send;
+$("#q").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); } });
+$("#newSession").onclick=()=>{ sessionId=null; toast("已开启新会话"); };
+
+/* ---------- 启动 ---------- */
+(async function init(){ refreshDocs(); renderTasks(); setInterval(()=>{ if(!document.hidden) refreshDocs(); }, 15000); })();
+</script>
+</body>
+</html>

@@ -1,12 +1,14 @@
 # ============================================================
-# BGE-M3 两阶段重排序 + 场景化来源权重
+# BGE-M3 两阶段重排序 + 场景化来源权重 + 可选权威权重
 # ============================================================
 
+import re
 import time
 from typing import List, Dict, Tuple
 import numpy as np
 from loguru import logger
 from config.settings import settings
+from src.core.knowledge_grader import knowledge_grader
 
 
 class SourceAwareReranker:
@@ -16,6 +18,11 @@ class SourceAwareReranker:
     - 粗排: 按 Milvus 向量相似度快速排序
     - 精排: BGE-M3 Cross-Encoder 逐对打分
     - 来源权重: 根据分类结果对分数加权
+    - 权威权重(可选): 按 chunk 的知识权威分级(Tier1-4)做小幅偏置，
+      默认关闭(use_authority_weight=False)保持与线上/消融基线行为一致；
+      开启后进入排序的可消融设计项，供权威分级效果 A/B 验证。
+      权威打标(authority_tier/label/confidence)始终附加到结果项上，
+      随 sources 返回客户端，实现"来源分级可追溯"。
     """
 
     def __init__(self):
@@ -45,11 +52,16 @@ class SourceAwareReranker:
         pubmed_results: List[Dict],
         source_weights: Tuple[float, float] = (0.5, 0.5),
         top_k: int = None,
+        use_authority_weight: bool = False,
     ) -> List[Dict]:
         """
         两阶段重排序 
         参数:
             source_weights: (local_weight, pubmed_weight) 来源权重
+            use_authority_weight: 是否叠加知识权威分级权重(Tier1-4)。
+                默认 False = 与既有行为/消融基线一致；True = 进入排序偏置。
+                无论开关如何，每个返回项都会附加 authority_tier /
+                authority_label / authority_confidence 打标，随 sources 透出。
         返回: 排序后的合并结果
         """
         if top_k is None:
@@ -73,6 +85,12 @@ class SourceAwareReranker:
             # Cross-Encoder 相关性打分 
             cross_score = self._cross_score(query, item["content"])
 
+            # 权威分级打标（与来源权重正交；始终附加，供 sources 展示/后续策略使用）
+            authority = self._authority_for(item)
+            item["authority_tier"] = authority["tier"]
+            item["authority_label"] = authority["label"]
+            item["authority_confidence"] = authority["confidence"]
+
             # 来源权重加权 ( 常见病优先本地指南, 前沿优先文献)
             source = item.get("source", "")
             if source == "local_kb":
@@ -81,6 +99,11 @@ class SourceAwareReranker:
                 weighted_score = cross_score * pubmed_weight
             else:
                 weighted_score = cross_score * 0.5
+
+            # 权威权重（可选消融项）：Tier4(0.60)≈0.90x、Tier1(0.95)≈1.08x，
+            # 只做小幅偏置——高相关性文档不被低档来源压过，低档同相关文档让位。
+            if use_authority_weight:
+                weighted_score *= (0.6 + 0.5 * authority["confidence"])
 
             item["rerank_score"] = weighted_score
             item["cross_score"] = cross_score
@@ -95,9 +118,37 @@ class SourceAwareReranker:
 
         logger.info(
             f"重排序完成: {len(all_results)} → 粗排{len(coarse_candidates)} "
-            f"→ 精排{len(final)}, 耗时={latency_ms:.0f}ms"
+            f"→ 精排{len(final)}, 耗时={latency_ms:.0f}ms, "
+            f"authority_weight={'on' if use_authority_weight else 'off'}"
         )
         return final
+
+    # ---------------- 权威分级打标 ----------------
+
+    @staticmethod
+    def _authority_for(item: Dict) -> Dict:
+        """为单个检索结果项判定知识权威分级。
+
+        探测文本优先级：item 已有的来源型字段（含中文的 title / source_type /
+        source）→ 从正文头部抓"来源/依据/指南/共识/说明书"等标记后的来源名
+        （知识库语料形如 `**来源指南:** 中国冠心病康复指南`）→ 正文头部前 40 字兜底。
+        判定交给 knowledge_grader.grade_source（AUTHORITY_TIERS 匹配）。
+        """
+        probe = ""
+        for key in ("title", "source_type", "source"):
+            value = str(item.get(key, "") or "").strip()
+            if value and re.search(r"[\u4e00-\u9fff]", value):
+                probe = value
+                break
+        if not probe:
+            head = (item.get("content", "") or "")[:200]
+            m = re.search(
+                r"(?:来源|依据|参考|指南|共识|说明书|规范)[：:\s]*"
+                r"([^。，,\n\s*]{2,30})",
+                head,
+            )
+            probe = m.group(1) if m else head[:40]
+        return knowledge_grader.grade_source(probe)
 
     def _cross_score(self, query: str, document: str) -> float:
         """BGE-M3 Cross-Encoder 逐对打分 ( 相关性打分)"""

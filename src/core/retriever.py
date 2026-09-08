@@ -9,8 +9,11 @@ import time
 import asyncio
 from typing import List, Dict, Optional, Tuple
 from loguru import logger
-from pymilvus import Collection, connections, utility
+from pymilvus import (
+    Collection, CollectionSchema, FieldSchema, DataType, connections, utility,
+)
 from config.settings import settings
+from src.core.retrieval import expand_query as _expand_query
 
 
 class DualSourceRetriever:
@@ -31,7 +34,7 @@ class DualSourceRetriever:
     # ========== 连接管理  ==========
 
     def connect(self):
-        """连接 Milvus ( 单机版)"""
+        """连接 Milvus ( 单机版)；collection 不存在时自动创建（非破坏）"""
         if self._connected:
             return
         try:
@@ -40,10 +43,7 @@ class DualSourceRetriever:
                 host=settings.milvus_host,
                 port=settings.milvus_port,
             )
-            self._local_col = Collection(settings.milvus_collection_kb)
-            self._local_col.load()
-            self._pubmed_col = Collection(settings.milvus_collection_pubmed)
-            self._pubmed_col.load()
+            self.ensure_collections(force=False)
             self._connected = True
             logger.info(
                 f"Milvus连接成功: {settings.milvus_host}:{settings.milvus_port}"
@@ -51,6 +51,51 @@ class DualSourceRetriever:
         except Exception as e:
             logger.error(f"Milvus连接失败: {e}")
             raise
+
+    def ensure_collections(self, force: bool = False):
+        """确保两个 Collection 存在（缺则建）；force=True 时删除重建（管理命令用）。
+
+        建表逻辑收敛在适配器内部——setup_milvus.py 不再各自维护一套 schema。
+        """
+        for name in (settings.milvus_collection_kb, settings.milvus_collection_pubmed):
+            exists = utility.has_collection(name)
+            if force and exists:
+                logger.warning(f"Collection 强制重建: {name}")
+                utility.drop_collection(name)
+                exists = False
+            if not exists:
+                self._create_collection(name)
+
+            col = Collection(name)
+            col.load()
+            if name == settings.milvus_collection_kb:
+                self._local_col = col
+            else:
+                self._pubmed_col = col
+
+    def _create_collection(self, name: str):
+        """按统一 schema + IP 指标创建 collection（与 retriever_lite 对齐）。"""
+        fields = [
+            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=settings.embedding_dim),
+            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="title", dtype=DataType.VARCHAR, max_length=512),
+            FieldSchema(name="department", dtype=DataType.VARCHAR, max_length=64),
+            FieldSchema(name="publish_time", dtype=DataType.VARCHAR, max_length=32),
+            FieldSchema(name="source_type", dtype=DataType.VARCHAR, max_length=32),
+            FieldSchema(name="doc_id", dtype=DataType.VARCHAR, max_length=128),
+        ]
+        schema = CollectionSchema(fields=fields, description=f"medical-rag collection: {name}")
+        col = Collection(name=name, schema=schema)
+        col.create_index(
+            field_name="embedding",
+            index_params={
+                "metric_type": "IP",
+                "index_type": "IVF_FLAT",
+                "params": {"nlist": 1024},
+            },
+        )
+        logger.info(f"Collection 创建完成: {name} (IP / dim={settings.embedding_dim})")
 
     # ========== Embedding ( BGE-M3, 1024维) ==========
 
@@ -188,26 +233,91 @@ class DualSourceRetriever:
             logger.error(f"Milvus检索错误 [{source}]: {e}")
             return []
 
-    # ========== 降级检索 ( 失败时用通用知识) ==========
+    # ========== 数据写入（与 retriever_lite.insert 同一 chunk 契约） ==========
 
-    def degrade_search(self, query: str) -> List[Dict]:
-        """
-        降级检索: 工具调用失败时返回空结果
-        触发大模型用通用知识回答 
-        """
-        logger.warning(f"检索降级: 返回空结果, 将使用通用知识回答 | query={query[:60]}")
-        return []
+    def insert(
+        self, collection_name: str, chunks: List[Dict], batch_size: int = 100
+    ):
+        """将分块向量化并写入指定 collection。
 
-    # ========== 关键词增强检索 ( 失败重试时调整关键词) ==========
+        chunk 格式: {"text": str, "metadata": {title, department,
+        publish_time, source_type, doc_id}} —— 与 retriever_lite.insert 完全一致。
+        """
+        if not self._connected:
+            self.connect()
+
+        col = Collection(collection_name)
+        col.load()
+        total = len(chunks)
+        inserted = 0
+        start = time.perf_counter()
+
+        for i in range(0, total, batch_size):
+            batch = chunks[i: i + batch_size]
+            texts = [c["text"] for c in batch]
+            embeddings = self.encode_query_batch(texts)
+
+            data = [
+                embeddings,
+                texts,
+                [c["metadata"].get("title", "") for c in batch],
+                [c["metadata"].get("department", "") for c in batch],
+                [c["metadata"].get("publish_time", "") for c in batch],
+                [c["metadata"].get("source_type", "medical_kb") for c in batch],
+                [c["metadata"].get("doc_id", "") for c in batch],
+            ]
+            col.insert(data)
+            inserted += len(batch)
+            logger.info(f"导入进度: {inserted}/{total} → {collection_name}")
+
+        col.flush()
+        latency = time.perf_counter() - start
+        logger.info(
+            f"导入完成: {inserted} 条 → {collection_name}, 耗时={latency:.1f}s"
+        )
+
+    def encode_query_batch(self, texts: List[str]) -> List[List[float]]:
+        """批量编码（灌库用，与 encode_query 共用 embedder）"""
+        embeddings = self.embedder.encode(
+            texts, normalize_embeddings=True, show_progress_bar=False
+        )
+        return embeddings.tolist()
+
+    # ========== 数据删除（按 doc_id，供上传替换/删除接口用） ==========
+
+    def delete_by_doc_id(
+        self,
+        collection_name: str,
+        doc_id: str,
+        department: Optional[str] = None,
+        timeout: Optional[float] = 30,
+    ) -> int:
+        """删除指定 collection 中某个 doc_id 的向量（可加 department 过滤）。
+
+        doc_id = 文件名去后缀（与 ingest_kb.py 同规则，保证同树重灌不重复）。
+        同名文档再上传 = 替换语义：先 delete_by_doc_id 清旧，再 insert 新。
+        跨科室同名文件存在时传 department 精确删；缺省则按 doc_id 全局删。
+        返回删除条数（不存在时返回 0，不报错）。
+        """
+        if not self._connected:
+            self.connect()
+        col = Collection(collection_name)
+        col.load()
+        # doc_id / department 是 VARCHAR 字段；转义双引号防注入/语法错
+        safe_doc = doc_id.replace("\\", "\\\\").replace('"', '\\"')
+        expr = f'doc_id == "{safe_doc}"'
+        if department:
+            safe_dept = department.replace("\\", "\\\\").replace('"', '\\"')
+            expr += f' and department == "{safe_dept}"'
+        result = col.delete(expr=expr, timeout=timeout)
+        col.flush()
+        deleted = result.delete_count if hasattr(result, "delete_count") else 0
+        logger.info(f"delete_by_doc_id: {doc_id} → {collection_name} 删 {deleted} 条")
+        return deleted
 
     def expand_query(self, query: str) -> str:
-        """
-        检索失败后的查询扩展 ( 自动调整检索关键词)
-        简单实现: 去掉部分停用词, 提取核心实体
-        """
-        stopwords = {"的", "了", "是", "我", "你", "吗", "呢", "啊", "吧", "什么", "怎么"}
-        words = [w for w in query if w not in stopwords]
-        return "".join(words) if words else query
+        """检索失败后的查询扩展 ( 自动调整检索关键词)"""
+        return _expand_query(query)
 
 
 # 全局单例

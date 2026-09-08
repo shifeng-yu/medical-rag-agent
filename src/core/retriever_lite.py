@@ -7,10 +7,12 @@
 import time
 import asyncio
 import json
+import os
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 from loguru import logger
 from config.settings import settings
+from src.core.retrieval import expand_query as _expand_query
 
 
 class LiteRetriever:
@@ -59,16 +61,31 @@ class LiteRetriever:
         for col_name in [settings.milvus_collection_kb, settings.milvus_collection_pubmed]:
             if not self._db.has_collection(col_name):
                 col = self._db.create_collection(name=col_name, schema=schema)
-                # Create IVF_FLAT index on vector field
+                # 与 Docker 版对齐: 统一 IP 指标（向量已归一化 → score≈余弦相似度）
                 col.create_index(field_name="vector", index_params={
                     "index_type": "IVF_FLAT",
-                    "metric_type": "COSINE",
+                    "metric_type": "IP",
                     "params": {"nlist": 128},
                 })
-                logger.info(f"Collection created: {col_name}")
+                logger.info(f"Collection created: {col_name} (IP)")
+            # 已存在的集合在 milvus-lite 3.x 打开时默认 released，
+            # query/search/delete 前必须先 load，否则抛 CollectionNotLoadedError。
+            self._ensure_loaded(col_name)
 
         self._collections_ready = True
         logger.info("Milvus Lite ready")
+
+    def _ensure_loaded(self, col_name: str):
+        """取集合并确保处于 loaded 态（load 幂等，重复调用无害）。
+
+        milvus-lite 3.x 对已存在的 collection 默认 released：
+        不 load 直接 query/search/delete 会抛 CollectionNotLoadedError，
+        造成"上传成功但检索为空 / 删除失效"的静默故障。
+        """
+        col = self._db.get_collection(col_name)
+        if getattr(col, "load_state", "loaded") != "loaded":
+            col.load()
+        return col
 
     def encode_query(self, query: str) -> List[float]:
         emb = self.embedder.encode(query, normalize_embeddings=True)
@@ -103,7 +120,7 @@ class LiteRetriever:
 
     def _search(self, col_name: str, vector: List[float], top_k: int, source: str) -> List[Dict]:
         try:
-            col = self._db.get_collection(col_name)
+            col = self._ensure_loaded(col_name)
 
             results = col.search(
                 query_vectors=[vector],
@@ -134,11 +151,14 @@ class LiteRetriever:
 
     # ========== 数据写入 ==========
 
-    def insert(self, col_name: str, chunks: List[Dict], batch_size: int = 50):
+    def insert(
+        self, collection_name: str, chunks: List[Dict], batch_size: int = 100
+    ):
+        """将分块向量化并写入指定 collection（与 retriever.insert 同一 chunk 契约）"""
         if not self._collections_ready:
             self.connect()
 
-        col = self._db.get_collection(col_name)
+        col = self._db.get_collection(collection_name)
         total = len(chunks)
 
         for i in range(0, total, batch_size):
@@ -161,18 +181,57 @@ class LiteRetriever:
                 })
 
             col.insert(data)
-            logger.info(f"写入 [{col_name}]: {min(i + batch_size, total)}/{total}")
+            logger.info(f"写入 [{collection_name}]: {min(i + batch_size, total)}/{total}")
 
-        try:
-            col.flush()
-        except Exception:
-            pass  # Windows 文件锁冲突，数据已经在内存中
-        logger.info(f"写入完成 [{col_name}]: {total} 条")
+        # Windows 持久化: milvus-lite 的 flush 在 Windows 存在 rename bug
+        # （os.rename 覆盖已存在文件 → FileExistsError）。实测发现失败一次
+        # flush 会把数据搞到"查不到"（索引段损坏），因此 Windows 直接跳过
+        # flush——数据驻留内存、可正常检索，仅进程重启后丢失（本地开发可接受）。
+        # Linux/CI 正常 flush 持久化。
+        if os.name != "nt":
+            try:
+                col.flush()
+            except Exception as e:
+                logger.warning(f"flush 失败（数据已在内存中）: {e}")
+        logger.info(f"写入完成 [{collection_name}]: {total} 条")
 
     def expand_query(self, query: str) -> str:
-        stopwords = {"的", "了", "是", "我", "你", "吗", "呢", "啊", "吧", "什么", "怎么"}
-        words = [w for w in query if w not in stopwords]
-        return "".join(words) if words else query
+        """检索失败后的查询扩展（共享实现，见 retrieval.expand_query）"""
+        return _expand_query(query)
+
+    # ========== 数据删除（按 doc_id，供上传替换/删除接口用） ==========
+
+    def delete_by_doc_id(
+        self,
+        collection_name: str,
+        doc_id: str,
+        department: Optional[str] = None,
+    ) -> int:
+        """删除指定 collection 中某个 doc_id 的向量（可加 department 过滤）。
+
+        milvus-lite 的 Collection.delete 只收主键列表（无 expr），因此
+        分两步：query 按 doc_id 查出主键 → delete(pks)。doc_id 与
+        retriever.delete_by_doc_id 同一语义（文件名去后缀）。返回删除条数；
+        doc_id 不存在时返回 0。
+        """
+        if not self._collections_ready:
+            self.connect()
+        col = self._ensure_loaded(collection_name)
+        # 主键 auto_id=INT64，doc_id 是 VARCHAR 标量字段
+        safe_doc = doc_id.replace("\\", "\\\\").replace('"', '\\"')
+        expr = f'doc_id == "{safe_doc}"'
+        if department:
+            safe_dept = department.replace("\\", "\\\\").replace('"', '\\"')
+            expr += f' and department == "{safe_dept}"'
+        rows = col.query(expr=expr, output_fields=["id", "doc_id", "department"])
+        if department:
+            rows = [r for r in rows if r.get("department") == department]
+        pks = [r["id"] for r in rows if r.get("doc_id") == doc_id]
+        deleted = 0
+        if pks:
+            deleted = col.delete(pks)
+        logger.info(f"delete_by_doc_id: {doc_id} → {collection_name} 删 {deleted} 条")
+        return deleted
 
 
 lite_retriever = LiteRetriever()

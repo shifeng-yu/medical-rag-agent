@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from loguru import logger
 from config.settings import settings
+from src.core.llm import get_llm
 from src.utils.helpers import count_tokens, load_prompt_template
 
 
@@ -190,11 +191,9 @@ class SessionManager:
         )
         prompt = prompt_template.replace("{history}", history_text)
 
-        # 调用大模型生成摘要(同步调用封装)
+        # 调用大模型生成摘要（走 LLM 总机，任务 summary）
         try:
-            from src.core.generator import generate_text
-
-            summary = generate_text(prompt, max_tokens=256)
+            summary = get_llm().complete("summary", prompt)
             return summary[:200]  # 限200字 
         except Exception as e:
             logger.warning(f"摘要生成失败，使用简单截断: {e}")

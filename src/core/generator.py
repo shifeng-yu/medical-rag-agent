@@ -2,28 +2,15 @@
 # 答案生成模块（CPU/GPU自适应）
 # GPU: GPTQ INT4 量化 
 # CPU: 标准transformers加载 (当前机器适配)
+#
+# 所有大模型调用都经 LLM 总机（src/core/llm.py）——
+# 业务模块只声明任务意图，采样参数由总机任务表统一管理。
 # ============================================================
 
 import time
 from loguru import logger
-from config.settings import settings
 from src.utils.helpers import load_prompt_template
-from src.core.model_loader import generate_text as _generate_text
-
-
-def generate_text(
-    prompt: str,
-    max_tokens: int = 1024,
-    temperature: float = 0.1,
-    do_sample: bool = False,
-) -> str:
-    """统一文本生成接口 (供 classifier / judge / summary / generator 共用)"""
-    return _generate_text(prompt, max_tokens, temperature, do_sample)
-
-
-def classify_with_llm(prompt: str, max_tokens: int = 10) -> str:
-    """L2 分类专用轻量调用 ( <100ms)"""
-    return generate_text(prompt, max_tokens=max_tokens, temperature=0.0)
+from src.core.llm import get_llm
 
 
 class AnswerGenerator:
@@ -58,7 +45,7 @@ class AnswerGenerator:
         prompt = prompt.replace("{conversation_context}", conversation_context or "无")
 
         start = time.perf_counter()
-        answer = generate_text(prompt, max_tokens=1024, temperature=0.3)
+        answer = get_llm().complete("answer", prompt)
         latency_ms = (time.perf_counter() - start) * 1000
 
         logger.info(f"回答生成完成: {len(answer)}字, {latency_ms:.0f}ms")
@@ -73,7 +60,7 @@ class AnswerGenerator:
                 "用户问题：{query}\n\n回答："
             )
         prompt = prompt_template.replace("{query}", query)
-        answer = generate_text(prompt, max_tokens=512, temperature=0.5)
+        answer = get_llm().complete("degraded", prompt)
         return (
             "⚠️ 当前检索工具暂时不可用，以下回答基于通用知识，仅供参考：\n\n"
             + answer

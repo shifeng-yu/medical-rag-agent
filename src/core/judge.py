@@ -10,6 +10,7 @@ import json
 from typing import Dict, Tuple, List
 from loguru import logger
 from config.settings import settings
+from src.core.llm import get_llm
 from src.utils.helpers import (
     extract_medical_entities,
     check_source_attribution,
@@ -167,9 +168,8 @@ class HallucinationJudge:
         prompt = prompt.replace("{answer}", answer)
 
         try:
-            from src.core.generator import generate_text
-
-            raw_output = generate_text(prompt, max_tokens=256, temperature=0.0)
+            # 三维打分走 LLM 总机（任务 judge，采样参数由任务表管理）
+            raw_output = get_llm().complete("judge", prompt)
             result = safe_json_parse(raw_output, default={
                 "factual_consistency": 0,
                 "logical_coherence": 0,

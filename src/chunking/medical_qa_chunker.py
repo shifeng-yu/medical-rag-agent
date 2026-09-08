@@ -113,7 +113,11 @@ class MedicalQAChunker:
 
             if token_count > self.max_tokens:
                 # 超长QA → 二级语义模块拆分，带原问题前缀
-                sub_chunks = self._semantic_split(qa_text, source_prefix=qa_meta.get("question", ""))
+                sub_chunks = self._semantic_split(
+                    qa_text,
+                    source_prefix=qa_meta.get("question", ""),
+                    source_metadata=source_metadata,
+                )
                 chunks.extend(sub_chunks)
                 logger.debug(f"二级拆分: {len(sub_chunks)} 个子块 (原token={token_count})")
             else:
@@ -166,12 +170,20 @@ class MedicalQAChunker:
 
         return pairs
 
-    def _semantic_split(self, text: str, source_prefix: str = "") -> List[ChunkInfo]:
+    def _semantic_split(
+        self,
+        text: str,
+        source_prefix: str = "",
+        source_metadata: Optional[Dict] = None,
+    ) -> List[ChunkInfo]:
         """
          超长QA二级拆分
         按语义模块(症状/诊断/用药/注意事项/检查)拆分
-        每个子块携带原问题前缀
+        每个子块携带原问题前缀与来源元数据（title/department/doc_id 等）
         """
+        if source_metadata is None:
+            source_metadata = {}
+
         # 找语义模块边界
         boundaries = [0]
         for name, pattern in SEMANTIC_MODULE_PATTERNS.items():
@@ -205,15 +217,23 @@ class MedicalQAChunker:
                         text=sub_text,
                         tokens=self.count_tokens(sub_text),
                         source_prefix=source_prefix,
+                        metadata=dict(source_metadata),
                     ))
             else:
                 chunks.append(ChunkInfo(
                     text=full_text,
                     tokens=token_count,
                     source_prefix=source_prefix,
+                    metadata=dict(source_metadata),
                 ))
 
-        return chunks if chunks else [ChunkInfo(text=text, tokens=self.count_tokens(text))]
+        return chunks if chunks else [
+            ChunkInfo(
+                text=text,
+                tokens=self.count_tokens(text),
+                metadata=dict(source_metadata),
+            )
+        ]
 
     def _token_window_split(self, text: str, prefix: str = "") -> List[str]:
         """按 token 滑动窗口分割长文本"""

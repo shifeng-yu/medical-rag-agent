@@ -83,6 +83,81 @@ class TestChat:
         assert resp.status_code == 422  # pydantic min_length 校验
 
 
+class TestGracefulDegradation:
+    """API 层降级回归：超时/过载不再因缺 session_id 崩成 500"""
+
+    def test_timeout_returns_200_with_session(self, client, monkeypatch):
+        """workflow 超时 → 200 + layer=timeout + 固定形状"""
+        import asyncio
+        from src.core.workflow import workflow
+
+        async def hang(query, session_id=None):
+            raise asyncio.TimeoutError()
+
+        monkeypatch.setattr(workflow, "run", hang)
+        resp = client.post("/api/v1/chat", json={"query": "头痛怎么办"})
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["judge_result"]["layer"] == "timeout"
+        assert data["session_id"]              # 历史 bug: 此处曾 KeyError
+        assert data["sources"] == []
+        assert data["answer"]
+
+    def test_overload_returns_200_with_session(self, client, monkeypatch):
+        """workflow 异常 → 200 + layer=overload + session_id 补全"""
+        from src.core.workflow import workflow
+
+        async def boom(query, session_id=None):
+            raise RuntimeError("模型崩了")
+
+        monkeypatch.setattr(workflow, "run", boom)
+        resp = client.post("/api/v1/chat", json={"query": "头痛怎么办"})
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["judge_result"]["layer"] == "overload"
+        assert data["session_id"]
+        assert data["answer"]
+
+
+class TestBatchRobustness:
+    """批量路由容错：结果 dict 新增键不再导致崩溃"""
+
+    def test_batch_tolerates_extra_keys(self, client, monkeypatch):
+        """workflow 返回多带键（含 sources/judge_result 里多余字段）→ 仍 200"""
+        from src.core.workflow import workflow
+
+        async def fake_run(query, session_id=None):
+            return {
+                "answer": "批量回答",
+                "sources": [{
+                    "title": "指南", "source": "local_kb", "score": 0.9,
+                    "publish_time": "", "department": "心内科",
+                    "vector": [1, 2, 3],        # 多余键（旧代码 **splat 会崩）
+                }],
+                "judge_result": {
+                    "layer": "both", "passed": True,  # 多余键
+                },
+                "latency_ms": 1.0,
+                "session_id": "batch-session",
+                "internal_note": "不应泄漏",          # 顶层多余键
+            }
+
+        monkeypatch.setattr(workflow, "run", fake_run)
+        resp = client.post("/api/v1/chat/batch", json={
+            "queries": [{"query": "问题一"}, {"query": "问题二"}],
+        })
+
+        assert resp.status_code == 200, resp.text
+        items = resp.json()
+        assert len(items) == 2
+        assert items[0]["sources"][0]["source"] == "local_kb"
+        assert items[0]["judge_result"]["layer"] == "both"
+        assert items[0]["session_id"] == "batch-session"
+        assert "vector" not in items[0]["sources"][0]  # 序列化时被剔除
+
+
 class TestStats:
     """运行统计接口"""
 
