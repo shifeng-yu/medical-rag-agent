@@ -2,7 +2,7 @@
 
 将 RAG 检索准确率提升 **27%**（61.8% → 78.5%）、幻觉率从 **18% 压至 3%** 的私有化医疗问诊系统，**一套面向实际部署使用的全科问诊 RAG**。编排引擎以 **RAGFlow 的 Agentic 图工作流为蓝本**自研落地（图编排 / 分支重试 / 降级全链路复现），`docker compose` 一键私有化部署；全链路本地，医疗数据不出域，无公网 API 调用。
 
-[![CI](https://github.com/yyyyyyyysf/medical-rag-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/yyyyyyyysf/medical-rag-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/shifeng-yu/medical-rag-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/shifeng-yu/medical-rag-agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
 [![Milvus](https://img.shields.io/badge/Milvus-2.4+-orange.svg)](https://milvus.io/)
@@ -117,7 +117,7 @@ curl -X POST http://localhost:8000/api/v1/documents/upload \
 
 ```bash
 # 0. 克隆仓库
-git clone https://github.com/yyyyyyyysf/medical-rag-agent.git
+git clone https://github.com/shifeng-yu/medical-rag-agent.git
 cd medical-rag-agent
 
 # 1. 安装依赖
