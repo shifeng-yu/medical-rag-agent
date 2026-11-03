@@ -1,9 +1,10 @@
 # ============================================================
 # 检索知识库门面（唯一选择逻辑）
 #
-# 项目里有两套"双源检索"适配器，同一接口、不同后端：
+# 项目里有三套"双源检索"适配器，同一接口、不同后端：
 #   - src/core/retriever.py      → Docker Milvus（pymilvus，生产）
 #   - src/core/retriever_lite.py → Milvus Lite（嵌入式，本地开发/CI）
+#   - src/core/retriever_pg.py   → PostgreSQL + pgvector（异构后端，验证"换引擎只改配置"）
 #
 # 历史问题：选后端的 if/else 复制在 workflow/ablation/routes/main 四处，
 # main 启动还无视配置；两套适配器已漂移（打分指标、both 并行度、insert 缺失）。
@@ -24,15 +25,36 @@ from config.settings import settings
 _retriever = None
 
 
+def backend_name() -> str:
+    """当前生效的检索后端名（milvus / milvus_lite / pgvector）。
+
+    显式 VECTOR_BACKEND 优先；未配置时沿用 USE_MILVUS_LITE，
+    保证既有部署在升级代码后行为不变。
+    """
+    raw = (settings.vector_backend or "").strip().lower()
+    if raw in ("pgvector", "pg"):
+        return "pgvector"
+    if raw in ("milvus_lite", "lite", "embedded"):
+        return "milvus_lite"
+    if raw in ("milvus", "docker"):
+        return "milvus"
+    return "milvus_lite" if settings.use_milvus_lite else "milvus"
+
+
 def get_retriever():
     """返回按配置选定的双源检索适配器。
 
     选择逻辑只存在于此处：workflow / ablation / routes / main / scripts
-    一律从本函数取适配器，禁止再写 if use_milvus_lite 分支。
+    一律从本函数取适配器，禁止再写 if settings.vector_backend 分支。
     """
     global _retriever
     if _retriever is None:
-        if settings.use_milvus_lite:
+        backend = backend_name()
+        if backend == "pgvector":
+            from src.core.retriever_pg import pg_retriever
+            _retriever = pg_retriever
+            logger.info("检索后端: PostgreSQL + pgvector")
+        elif backend == "milvus_lite":
             from src.core.retriever_lite import lite_retriever
             _retriever = lite_retriever
             logger.info("检索后端: Milvus Lite（嵌入式）")
@@ -43,7 +65,7 @@ def get_retriever():
     return _retriever
 
 
-# ---------------- 适配器契约（两个适配器共同遵守） ----------------
+# ---------------- 适配器契约（三个适配器共同遵守） ----------------
 #
 # 接口: connect / retrieve / insert / expand_query / encode_query / embedder
 # 结果: retrieve 返回 (local_results, pubmed_results, latency_ms)，

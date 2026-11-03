@@ -36,7 +36,7 @@ class TestGetRetriever:
         assert isinstance(retrieval.get_retriever(), LiteRetriever)
 
     def test_docker_mode_selects_pymilvus(self, monkeypatch):
-        pymilvus = pytest.importorskip("pymilvus")
+        pytest.importorskip("pymilvus")
         from src.core import retrieval
         from src.core.retriever import DualSourceRetriever
         monkeypatch.setattr(retrieval, "_retriever", None)
@@ -47,6 +47,13 @@ class TestGetRetriever:
 # ---------------- 2. 适配器契约一致 ----------------
 
 def _adapter_classes():
+    # 契约对齐测试要同时 import 两个适配器：缺任一后端依赖就整体跳过，
+    # 否则本地只装了 Lite 时会在 collection 阶段炸出"假失败"。
+    pytest.importorskip("pymilvus")
+    from tests._env import require_milvus_lite
+
+    require_milvus_lite()
+
     from src.core.retriever import DualSourceRetriever
     from src.core.retriever_lite import LiteRetriever
     return [DualSourceRetriever, LiteRetriever]
@@ -62,7 +69,9 @@ class TestAdapterParity:
     @pytest.fixture(params=[False, True], ids=["docker", "lite"])
     def adapter_class(self, request):
         if request.param:
-            pytest.importorskip("milvus_lite")
+            from tests._env import require_milvus_lite
+
+            require_milvus_lite()
         else:
             pytest.importorskip("pymilvus")
         classes = _adapter_classes()
@@ -85,6 +94,7 @@ class TestAdapterParity:
 
     def test_expand_query_shared_source(self):
         """两边 expand_query 行为一致（单一实现）"""
+        pytest.importorskip("pymilvus")   # retriever.py 顶层 import pymilvus
         from src.core.retriever import DualSourceRetriever
         from src.core.retriever_lite import LiteRetriever
         docker, lite = DualSourceRetriever(), LiteRetriever()
@@ -92,6 +102,7 @@ class TestAdapterParity:
             assert docker.expand_query(q) == lite.expand_query(q)
 
     def test_expand_query_removes_stopwords_only(self):
+        pytest.importorskip("pymilvus")
         from src.core.retriever import DualSourceRetriever
         r = DualSourceRetriever()
         assert r.expand_query("我头痛的厉害") == "头痛厉害"
@@ -141,7 +152,9 @@ def _chunk(text, doc_id, source_type="local_kb"):
 class TestLiteRoundtrip:
     @pytest.fixture()
     def lite_roundtrip(self, monkeypatch):
-        pytest.importorskip("milvus_lite")
+        from tests._env import require_milvus_lite
+
+        require_milvus_lite()
         from src.core.retriever_lite import LiteRetriever
 
         retriever = LiteRetriever()

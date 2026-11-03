@@ -5,7 +5,7 @@
 import re
 import json
 from pathlib import Path
-from typing import List, Tuple, Set, Optional
+from typing import Tuple, Set
 from loguru import logger
 
 

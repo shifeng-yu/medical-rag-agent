@@ -7,7 +7,7 @@ import time
 import json
 import threading
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Dict, List
 from datetime import datetime
 from loguru import logger
 
@@ -32,6 +32,14 @@ class RequestMetrics:
         self.final_output: str = ""
         self.retry_count: int = 0
         self.error_message: str = ""
+        # ---- 流式指标 ----
+        # stream_mode: token（边生成边推）/ buffered（先校验后回放）/ off（阻塞接口）
+        self.stream_mode: str = "off"
+        # 首字延迟：首个真正下发字符的耗时。stream_mode=token 记模型首字，
+        # buffered 记校验通过后的首字；0 表示未进入生成阶段（如入口拦截）
+        self.first_token_ms: float = 0.0
+        # 流式风险分级：high / low（空 = 未判定，如入口拦截）
+        self.risk_level: str = ""
 
     def to_dict(self) -> dict:
         total_ms = (time.time() - self.start_time) * 1000
@@ -50,6 +58,9 @@ class RequestMetrics:
             "outcome": self.outcome,
             "retry_count": self.retry_count,
             "error": self.error_message,
+            "stream_mode": self.stream_mode,
+            "first_token_ms": round(self.first_token_ms, 2),
+            "risk_level": self.risk_level,
         }
 
 

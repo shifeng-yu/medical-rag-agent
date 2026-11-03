@@ -6,7 +6,6 @@
 # ============================================================
 
 import re
-import json
 from typing import Dict, Tuple, List
 from loguru import logger
 from config.settings import settings

@@ -75,7 +75,7 @@ class TestFinishTable:
         # 返回形状固定 6 键（含 outcome 出口标记）
         assert set(result.keys()) == {
             "answer", "sources", "judge_result", "latency_ms", "session_id",
-            "outcome",
+            "outcome", "message_id",
         }
         assert result["session_id"] == "sid-1"
         assert result["answer"] == f"答复-{kind}"
@@ -151,19 +151,36 @@ class TestToSources:
             "title": "指南", "source": "local_kb",
             "rerank_score": 0.88, "publish_time": "2024", "department": "心内科",
             "authority_tier": "tier_1", "authority_label": "临床指南",
-            "content": "不应泄漏的内部字段",  # 非白名单字段必须被剔除
+            "doc_id": "cardiology", "content": "不应泄漏的内部字段",
         }]
         out = outcome.to_sources(reranked)
-        assert out == [{
+
+        assert set(out[0].keys()) == set(outcome.SOURCE_FIELDS)
+        assert {
+            k: out[0][k] for k in (
+                "title", "source", "score", "publish_time",
+                "department", "authority_tier", "authority_label", "doc_id",
+            )
+        } == {
             "title": "指南", "source": "local_kb",
             "score": 0.88, "publish_time": "2024", "department": "心内科",
             "authority_tier": "tier_1", "authority_label": "临床指南",
-        }]
+            "doc_id": "cardiology",
+        }
+        # 原文只经 snippet 透出；chunk_id 是正文派生的 12 位稳定标识
+        assert out[0]["snippet"] == "不应泄漏的内部字段"
+        assert len(out[0]["chunk_id"]) == 12
+
+    def test_snippet_truncated(self):
+        """snippet 截断到 1000 字，避免把整篇文档塞进响应。"""
+        out = outcome.to_sources([{"content": "医" * 5000}])
+        assert len(out[0]["snippet"]) == outcome.SNIPPET_MAX_CHARS == 1000
 
     def test_limit_and_empty(self):
         assert outcome.to_sources([{"title": "a"}, {"title": "b"}], limit=1) == [
             {"title": "a", "source": "", "score": 0, "publish_time": "",
-             "department": "", "authority_tier": "", "authority_label": ""},
+             "department": "", "authority_tier": "", "authority_label": "",
+             "doc_id": "", "chunk_id": "", "snippet": ""},
         ]
         assert outcome.to_sources([]) == []
         assert outcome.to_sources(None) == []
@@ -179,7 +196,7 @@ class TestDegrade:
 
         assert set(result.keys()) == {
             "answer", "sources", "judge_result", "latency_ms", "session_id",
-            "outcome",
+            "outcome", "message_id",
         }
         assert result["session_id"] == "anon-1"      # 历史 bug：此处曾缺失
         assert result["outcome"] == kind

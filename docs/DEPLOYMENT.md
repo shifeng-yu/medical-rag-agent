@@ -14,6 +14,8 @@
 | 19530 / 9091 | `milvus-standalone` | 向量库 gRPC / 健康检查 |
 | 9000 / 9001 | `minio` | Milvus 对象存储（内部） |
 | 2379 | `etcd` | Milvus 元数据（内部） |
+| 3306 | `medical-rag-mysql` | 会话/来源/反馈/指标/任务（真源，仅内网） |
+| 6379 | `medical-rag-redis` | 会话热缓存 + Celery broker（仅内网） |
 
 生产防火墙只需放行 **8000**（及内网管理面）；19530/9000/2379 建议仅内网可达。
 
@@ -23,7 +25,7 @@
 |---|---|
 | Docker | 20.10+（compose v2，`docker compose version` 确认） |
 | GPU | NVIDIA 驱动 + `nvidia-container-toolkit`。compose 默认启用 GPTQ INT4（Qwen-14B 推理约需 **8GB 显存**）；若改标准加载（`USE_GPTQ=0`）需 ≥16GB 显存或走 CPU |
-| 内存 | ≥ 16GB（模型加载 + milvus/etcd/minio） |
+| 内存 | ≥ 16GB（模型加载 + milvus/etcd/minio）；MySQL/Redis 常驻约 1GB |
 | 磁盘 | ≥ 20GB（torch+auto-gptq 镜像构建约 10GB，另加数据卷） |
 | 模型权重 | 两份，见步骤 3（一次性准备） |
 
@@ -61,6 +63,54 @@ cp .env.example .env   # 如需覆盖默认值
 - `USE_MILVUS_LITE=0`：容器走 pymilvus → Docker Milvus。若误设 true，服务会改用嵌入式 Milvus Lite 并把数据写在容器可写层，**容器重建即丢**。
 - `USE_GPTQ=1`：compose 默认置 1，走 GPTQ INT4 加载（对应 3.1 的 GPTQ-Int4 权重目录，约 8GB 显存）。若想用标准加载（≥16GB 显存或 CPU），改 `USE_GPTQ=0` 并把 `QWEN_MODEL_PATH` 指向标准权重目录。
 - `MILVUS_HOST=localhost`：host 网络下直连本机 milvus-standalone。
+
+### 3.2.1 数据库与缓存（compose 已内置）
+
+`docker compose up` 会一并拉起 `mysql:8.0` 与 `redis:7`：
+
+| 组件 | 作用 | 默认值 |
+|---|---|---|
+| MySQL | 会话历史 / 来源 / 反馈 / 回合指标 / 任务状态（**真源，永久保留**） | 库 `medical_rag`，账号 `medrag / medrag_dev2026`（`MYSQL_*` 可覆盖） |
+| Redis | 热会话 24h TTL + Celery broker | `redis://127.0.0.1:6379/0`，AOF 持久化 |
+| worker | 灌库 / 索引重建（Celery） | `--concurrency=1`，`DEVICE=cpu`（不与 API 抢显存） |
+
+建表由 API 启动时 `create_all` 完成（幂等），也可先手动执行：
+
+```bash
+docker compose run --rm medical-rag-api python scripts/init_db.py
+```
+
+**生产必须改默认口令**，并在 `docker-compose.yml` 的 `DATABASE_URL` 中使用同一组值。校验：
+
+```bash
+docker compose exec mysql mysql -umedrag -pmedrag_dev2026 -e "use medical_rag; show tables;"
+docker compose exec redis redis-cli ping   # → PONG
+```
+
+> 数据备份：`./volumes/mysql` 与 `./volumes/redis` 一并纳入备份；Redis 丢数据只影响热缓存与队列，会话历史从 MySQL 回源。
+
+### 3.2.2 可选：切到 PostgreSQL + pgvector
+
+默认检索后端是 Milvus。若现场已有 PG 运维体系、想少维护一个向量组件，可切到 pgvector
+（第三个后端，契约与 Milvus 适配器一致，见 ADR-0009）：
+
+```bash
+# 1) 起 PG（profile，默认不启动；host 网络下占 5432）
+docker compose --profile pgvector up -d postgres
+
+# 2) 切后端并重启 API/worker（PG_DSN 用 .env 里的 PG_USER/PG_PASSWORD/PG_DATABASE 拼）
+VECTOR_BACKEND=pgvector docker compose up -d medical-rag-api medical-rag-worker
+
+# 3) 首次切换必须重灌：向量存在各自引擎里，不通用
+docker compose exec medical-rag-api python scripts/ingest_kb.py
+docker compose exec medical-rag-api python scripts/ingest_pubmed.py
+```
+
+表与索引由适配器 `connect()` 自动创建（`CREATE EXTENSION vector`、`kb_chunks` 表、
+`(collection, doc_id)` B-tree、`embedding` 的 HNSW 索引）。账号需要建扩展权限；
+不是超级用户时，先由 DBA 执行 `CREATE EXTENSION vector;`。
+
+> 切回 Milvus：`VECTOR_BACKEND=milvus` + 重新灌库即可，代码无需改动。
 
 ### 3.3 构建与启动
 

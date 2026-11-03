@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import json
 from typing import List, Dict
 from loguru import logger
 from config.settings import settings

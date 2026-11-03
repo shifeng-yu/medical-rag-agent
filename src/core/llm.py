@@ -39,6 +39,7 @@ TASKS: Dict[str, Dict] = {
 # 后端约定（不强制继承，接口一致性由 tests/test_llm.py 契约测试锁死）：
 #   generate(task: str, prompt: str, *, max_tokens: int,
 #            temperature: float, do_sample: bool) -> str
+#   generate_stream(...) -> Iterator[str]      # 可选；SSE 用，缺失则总机切片降级
 
 
 class QwenBackend:
@@ -128,6 +129,64 @@ class QwenBackend:
         )
         return generated.strip()
 
+    def generate_stream(
+        self,
+        task: str,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        do_sample: bool,
+    ):
+        """逐 token 产出（供 SSE 使用）。
+
+        实现要点：transformers 的 generate 是阻塞调用，无法直接 await。
+        这里用 TextIteratorStreamer + 后台线程：主线程（事件循环线程）
+        只做队列消费，模型推理在独立线程里跑，GIL 由 torch 的 C 扩展释放，
+        因此不会把整个事件循环卡住。
+        """
+        import torch
+        from threading import Thread
+        from transformers import TextIteratorStreamer
+
+        self._ensure_loaded()
+        tokenizer, model = self._tokenizer, self._model
+
+        inputs = tokenizer(prompt, return_tensors="pt")
+        if settings.device == "cuda":
+            inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+        gen_kwargs = {
+            "max_new_tokens": max_tokens,
+            "pad_token_id": tokenizer.eos_token_id,
+        }
+        if do_sample:
+            gen_kwargs["temperature"] = temperature
+            gen_kwargs["top_p"] = 0.9
+
+        streamer = TextIteratorStreamer(
+            tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
+        worker = Thread(
+            target=model.generate,
+            kwargs={**inputs, **gen_kwargs, "streamer": streamer},
+            daemon=True,
+            name="qwen-stream",
+        )
+        worker.start()
+
+        try:
+            with torch.no_grad():
+                for text in streamer:
+                    if text:
+                        yield text
+        finally:
+            # 客户端提前断开时主线程退出迭代，后台线程自然跑完（daemon），
+            # 这里只等一小会儿，避免请求线程被推理尾巴长期占住。
+            worker.join(timeout=0.5)
+            if worker.is_alive():
+                logger.warning("流式生成被提前中断，后台推理线程仍在收尾")
+
 
 class FakeLLM:
     """假后端：确定性应答，不加载任何模型。
@@ -213,27 +272,27 @@ class FakeLLM:
         # 根据关键词特征粗分类, 选择不同提示骨架(只动表述骨架, 不引入具体实体)
         if any(k in query for k in ("保养", "预防", "管理", "怎么", "如何", "注意")):
             body = (
-                f"1. 日常应注意规律作息与均衡饮食，戒烟限酒并适度运动；\n"
-                f"2. 定期复查相关指标，出现异常及时就医；\n"
-                f"3. 遵医嘱规范用药，切勿自行调整方案。"
+                "1. 日常应注意规律作息与均衡饮食，戒烟限酒并适度运动；\n"
+                "2. 定期复查相关指标，出现异常及时就医；\n"
+                "3. 遵医嘱规范用药，切勿自行调整方案。"
             )
         elif any(k in query for k in ("症状", "原因", "是什么", "怎么回事", "为啥")):
             body = (
-                f"1. 检索资料显示相关症状可能与多种因素相关，需要结合个人情况评估；\n"
-                f"2. 建议先观察伴随特征（持续时间、严重程度、诱因），记录后供医生参考；\n"
-                f"3. 如出现明显加重或新发症状，请尽快就医明确诊断。"
+                "1. 检索资料显示相关症状可能与多种因素相关，需要结合个人情况评估；\n"
+                "2. 建议先观察伴随特征（持续时间、严重程度、诱因），记录后供医生参考；\n"
+                "3. 如出现明显加重或新发症状，请尽快就医明确诊断。"
             )
         elif any(k in query for k in ("治疗", "用药", "怎么办", "怎么治", "药")):
             body = (
-                f"1. 治疗方案需依据具体诊断与个人情况由医生决定；\n"
-                f"2. 切勿自行购买或调整处方类药物；\n"
-                f"3. 建议携带既往检查报告到正规医院就诊，由医生制定个体化方案。"
+                "1. 治疗方案需依据具体诊断与个人情况由医生决定；\n"
+                "2. 切勿自行购买或调整处方类药物；\n"
+                "3. 建议携带既往检查报告到正规医院就诊，由医生制定个体化方案。"
             )
         else:
             body = (
-                f"1. 检索到相关医学资料，建议结合个人情况参考；\n"
-                f"2. 日常管理以规律生活方式为基础；\n"
-                f"3. 具体诊疗请咨询专业医生。"
+                "1. 检索到相关医学资料，建议结合个人情况参考；\n"
+                "2. 日常管理以规律生活方式为基础；\n"
+                "3. 具体诊疗请咨询专业医生。"
             )
 
         return (
@@ -276,12 +335,34 @@ class FakeLLM:
             )
         return self.DEFAULT_ANSWER
 
+    def generate_stream(
+        self,
+        task: str,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        do_sample: bool,
+    ):
+        """假后端的"流"：把确定性结果切成小片产出。
+
+        不 sleep：测试与 CI 不该为动画付出时间；真实打字机节奏由前端
+        按帧渲染决定，服务端不对传输做人为延迟。
+        """
+        text = self.generate(
+            task, prompt,
+            max_tokens=max_tokens, temperature=temperature, do_sample=do_sample,
+        )
+        step = 8
+        for i in range(0, len(text), step):
+            yield text[i:i + step]
+
 
 # ==================== 总机 ====================
 
 
 class LLMService:
-    """总机：任务参数表 + 后端分发。业务模块只调 complete(task, prompt)。"""
+    """总机：任务参数表 + 后端分发。业务模块只调 complete / stream。"""
 
     def __init__(self, backend):
         self._backend = backend
@@ -290,7 +371,12 @@ class LLMService:
     def backend(self):
         return self._backend
 
-    def complete(self, task: str, prompt: str, **overrides) -> str:
+    def _resolve(self, task: str, overrides: Dict) -> Dict:
+        """校验任务名与覆盖参数，返回本次调用的最终参数表。
+
+        覆盖只允许改参数表里已声明的键——防止调用方各自发明采样参数，
+        把「单一来源」重新打散。
+        """
         if task not in TASKS:
             raise ValueError(
                 f"未知 LLM 任务: {task!r}（可用: {sorted(TASKS)}）"
@@ -300,12 +386,29 @@ class LLMService:
             if key not in spec:
                 raise TypeError(f"任务 {task!r} 不支持覆盖参数 {key!r}")
             spec[key] = value
-        return self._backend.generate(
-            task, prompt,
-            max_tokens=spec["max_tokens"],
-            temperature=spec["temperature"],
-            do_sample=spec["do_sample"],
-        )
+        return spec
+
+    def complete(self, task: str, prompt: str, **overrides) -> str:
+        spec = self._resolve(task, overrides)
+        return self._backend.generate(task, prompt, **spec)
+
+    def stream(self, task: str, prompt: str, **overrides):
+        """逐片产出（同步迭代器，由调用方负责跨线程消费）。
+
+        后端未实现 generate_stream 时降级为"整段生成 + 切片下发"——
+        流式是传输能力，不该成为后端的强制契约；测试替身只要实现
+        generate 就能跑通整条链路。
+        """
+        spec = self._resolve(task, overrides)
+        stream_fn = getattr(self._backend, "generate_stream", None)
+        if stream_fn is None:
+            text = self._backend.generate(task, prompt, **spec)
+            step = 16
+            for i in range(0, len(text), step):
+                yield text[i:i + step]
+            return
+        yield from stream_fn(task, prompt, **spec)
+
 
 
 _llm_instance: Optional[LLMService] = None

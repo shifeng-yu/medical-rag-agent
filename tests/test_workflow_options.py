@@ -89,7 +89,7 @@ class TestRunOptionsToggles:
 
     def test_default_options_equal_none(self, monkeypatch, capture_effects):
         """不传 options 与显式 RunOptions() 行为一致（在线路径零变化）"""
-        wf = _stub_nodes(monkeypatch)
+        _stub_nodes(monkeypatch)
         counters = _probe(
             monkeypatch,
             rerank=lambda q, l, p, source_weights=None: [
@@ -112,7 +112,7 @@ class TestRunOptionsToggles:
 
     def test_judge_off_skips_validate_and_marks_layer(self, monkeypatch, capture_effects):
         """use_judge=False: judge.validate 不被调用，judge_result 占位 ablation_off"""
-        wf = _stub_nodes(monkeypatch)
+        _stub_nodes(monkeypatch)
         counters = _probe(
             monkeypatch,
             rerank=lambda q, l, p, source_weights=None: [
@@ -131,7 +131,7 @@ class TestRunOptionsToggles:
 
     def test_reranker_off_skips_rerank(self, monkeypatch, capture_effects):
         """use_reranker=False: rerank 不被调用，走原始拼接"""
-        wf = _stub_nodes(monkeypatch)
+        _stub_nodes(monkeypatch)
         counters = _probe(
             monkeypatch,
             rerank=lambda q, l, p, source_weights=None: [],
@@ -149,7 +149,7 @@ class TestRunOptionsToggles:
 
     def test_session_off_no_history_write(self, monkeypatch, capture_effects):
         """use_session=False（评测模式）: 不建会话、不写历史，答复也不写"""
-        wf = _stub_nodes(monkeypatch)
+        _stub_nodes(monkeypatch)
         counters = _probe(
             monkeypatch,
             get_or_create_session=lambda sid=None: "created-sid",

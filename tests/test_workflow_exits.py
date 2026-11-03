@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest
 
-from src.core import outcome
 from src.monitoring.logger import request_logger
 from src.session.manager import session_manager
 
@@ -61,7 +60,7 @@ class TestWorkflowExits:
         assert result["judge_result"]["reason"] == "疑似心梗"
         assert set(result.keys()) == {
             "answer", "sources", "judge_result", "latency_ms", "session_id",
-            "outcome",
+            "outcome", "message_id",
         }
         assert result["outcome"] == "emergency_blocked"
         # 写会话（面向用户的正式答复）
@@ -160,12 +159,15 @@ class TestWorkflowExits:
         assert logged[0].outcome == "ok"
         assert logged[0].success is True
         assert any(a[1] == "assistant" for a in written)
-        # sources 只含白名单键（含 reranker 打标的权威分级）
+        # sources 只含白名单键（含 reranker 打标的权威分级 + 溯源三字段）
         assert set(result["sources"][0].keys()) == {
             "title", "source", "score", "publish_time", "department",
             "authority_tier", "authority_label",
+            "doc_id", "chunk_id", "snippet",
         }
+        # 原始 content 字段不外泄；原文只经 snippet 截断后透出
         assert "content" not in result["sources"][0]
+        assert result["sources"][0]["snippet"] == "不应泄漏"
         assert result["sources"][0]["score"] == 0.9
 
     def test_error_exit_no_session_write(self, monkeypatch, capture_effects):
@@ -184,7 +186,7 @@ class TestWorkflowExits:
         assert result["judge_result"]["layer"] == "error"
         assert set(result.keys()) == {
             "answer", "sources", "judge_result", "latency_ms", "session_id",
-            "outcome",
+            "outcome", "message_id",
         }
         assert result["outcome"] == "error"
         assert len(logged) == 1

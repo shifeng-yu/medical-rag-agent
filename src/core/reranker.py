@@ -5,7 +5,6 @@
 import re
 import time
 from typing import List, Dict, Tuple
-import numpy as np
 from loguru import logger
 from config.settings import settings
 from src.core.knowledge_grader import knowledge_grader

@@ -7,8 +7,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import pytest
-
 from src.core.workflow import RunOptions
 from scripts.ablation import AblationConfig, build_configs, evaluate
 

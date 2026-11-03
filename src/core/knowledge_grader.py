@@ -8,7 +8,7 @@ Covers:
   - Department-based metadata filtering support
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 # ============================================================
 # Authority tier definitions

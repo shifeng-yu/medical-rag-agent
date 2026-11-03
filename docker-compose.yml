@@ -61,6 +61,63 @@ services:
       - minio
     network_mode: host
 
+  # ---- MySQL：会话历史 / 用户反馈 / 任务状态（真源，永久留存供复盘） ----
+  mysql:
+    container_name: medical-rag-mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_2026}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-medical_rag}
+      MYSQL_USER: ${MYSQL_USER:-medrag}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-medrag_dev2026}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+08:00
+    volumes:
+      - ./volumes/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-changeme_2026}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    network_mode: host
+
+  # ---- Redis：会话热缓存（24h TTL）+ Celery broker ----
+  redis:
+    container_name: medical-rag-redis
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - ./volumes/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    network_mode: host
+
+  # ---- 可选：PostgreSQL + pgvector（VECTOR_BACKEND=pgvector 时启用） ----
+  # 默认不启动（profile），避免与 Milvus 抢资源：
+  #   docker compose --profile pgvector up -d
+  #   并在 .env 里设 VECTOR_BACKEND=pgvector
+  postgres:
+    container_name: medical-rag-postgres
+    image: pgvector/pgvector:pg16
+    profiles: ["pgvector"]
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-medical_rag}
+      POSTGRES_USER: ${PG_USER:-medrag}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-medrag_dev2026}
+    volumes:
+      - ./volumes/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${PG_USER:-medrag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    network_mode: host
+
   # ---- RAG 服务（容器化生产运行；网页上传/问答入口 :8000） ----
   # host 网络：etcd(2379)/minio(9000/9001)/milvus(19530/9091)/api(8000)/baseline(8001)
   # 全部直接监听主机端口，容器间经 localhost 互通（ADR-0005 决策 7/8）。
@@ -71,9 +128,15 @@ services:
       - MILVUS_HOST=localhost          # host 网络下连本机 milvus-standalone
       - MILVUS_PORT=19530
       - USE_MILVUS_LITE=0              # 容器内走 pymilvus → Docker Milvus，禁用嵌入式 Lite
+      - VECTOR_BACKEND=${VECTOR_BACKEND:-milvus}   # milvus / pgvector（切 pgvector 见下方 postgres 服务）
+      - PG_DSN=postgresql://${PG_USER:-medrag}:${PG_PASSWORD:-medrag_dev2026}@127.0.0.1:5432/${PG_DATABASE:-medical_rag}
       - QWEN_MODEL_PATH=/models/Qwen-14B-Chat-GPTQ-Int4
       - USE_GPTQ=1                 # 生产部署启用 GPTQ INT4（8G 显存路径）；标准加载改 0（≥16G 显存或 CPU）
       - BGE_MODEL_PATH=/models/bge-m3
+      # 会话/反馈/任务：MySQL 真源；Redis 做热缓存与 Celery broker
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-medrag}:${MYSQL_PASSWORD:-medrag_dev2026}@127.0.0.1:3306/${MYSQL_DATABASE:-medical_rag}?charset=utf8mb4
+      - REDIS_URL=redis://127.0.0.1:6379/0
+      - TASK_MODE=celery
     volumes:
       - ./models:/models:ro          # 模型权重 (只读) — 必须预先放置，见 docs/DEPLOYMENT.md
       - ./data:/app/data             # 知识库数据 rw：网页上传落盘 data/medical_kb/<department>/
@@ -93,6 +156,44 @@ services:
       --workers 1
     depends_on:
       milvus:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    network_mode: host
+
+  # ---- 灌库/重建 worker（Celery；与 API 共用镜像与数据卷） ----
+  # 嵌入跑 CPU：单卡 12G 上 API 已占 Qwen(~8G)+BGE(~2G)，worker 再抢显存会 OOM。
+  # 若有多卡或大显存，把 DEVICE 改回 cuda 并给 worker 单独分配 GPU。
+  medical-rag-worker:
+    build: .
+    container_name: medical-rag-worker
+    environment:
+      - MILVUS_HOST=localhost
+      - MILVUS_PORT=19530
+      - USE_MILVUS_LITE=0
+      - VECTOR_BACKEND=${VECTOR_BACKEND:-milvus}
+      - PG_DSN=postgresql://${PG_USER:-medrag}:${PG_PASSWORD:-medrag_dev2026}@127.0.0.1:5432/${PG_DATABASE:-medical_rag}
+      - DEVICE=cpu
+      - BGE_MODEL_PATH=/models/bge-m3
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-medrag}:${MYSQL_PASSWORD:-medrag_dev2026}@127.0.0.1:3306/${MYSQL_DATABASE:-medical_rag}?charset=utf8mb4
+      - REDIS_URL=redis://127.0.0.1:6379/0
+      - TASK_MODE=celery
+    volumes:
+      - ./models:/models:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./prompts:/app/prompts:ro
+    command: >
+      celery -A src.tasks.celery_app.celery_app worker
+      -l info --concurrency=1 -Q celery
+    depends_on:
+      milvus:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     network_mode: host
 

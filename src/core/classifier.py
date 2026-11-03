@@ -5,7 +5,7 @@
 # - L2: Qwen 二分类兜底 (<100ms)
 # ============================================================
 
-from typing import Tuple, Optional
+from typing import Tuple
 from loguru import logger
 from config.settings import settings
 from src.utils.helpers import match_keywords, load_keywords, load_prompt_template

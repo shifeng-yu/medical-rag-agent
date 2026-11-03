@@ -54,7 +54,9 @@ class _FakeEmbedder:
 @pytest.fixture()
 def doc_env(monkeypatch):
     """独立 app + 临时 Lite 库（假编码器）+ 临时知识库目录"""
-    pytest.importorskip("milvus_lite")
+    from tests._env import require_milvus_lite
+
+    require_milvus_lite()
     monkeypatch.setattr(settings, "use_milvus_lite", True)
 
     tmp_kb = tempfile.mkdtemp(prefix="medrag_kb_")

@@ -2,7 +2,8 @@
 # FastAPI Pydantic 请求/响应模型
 # ============================================================
 
-from typing import List, Optional, Dict
+from typing import Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -44,6 +45,13 @@ class SourceInfo(BaseModel):
         default="", description="知识权威分级: tier_1/tier_2/tier_3/tier_4"
     )
     authority_label: str = Field(default="", description="权威分级标签，如临床指南")
+    doc_id: str = Field(default="", description="命中文档 ID（文件名去后缀）")
+    chunk_id: str = Field(
+        default="", description="命中块 ID（正文 sha1 前 12 位，跨后端稳定）"
+    )
+    snippet: str = Field(
+        default="", description="命中原文片段（截断至 1000 字，供引用溯源侧栏展示）"
+    )
 
 
 class JudgeResult(BaseModel):
@@ -65,6 +73,9 @@ class QueryResponse(BaseModel):
     judge_result: JudgeResult = Field(description="幻觉校验结果")
     latency_ms: float = Field(description="总响应耗时(毫秒)")
     session_id: str = Field(description="会话ID")
+    message_id: str = Field(
+        default="", description="本次回答的消息ID（提交反馈时用；落库失败为空）"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -102,10 +113,13 @@ class UploadDocumentsResponse(BaseModel):
 
 
 class DocumentTask(BaseModel):
-    """单个灌库任务的状态快照"""
+    """单个灌库 / 重建任务的状态快照"""
     task_id: str
     status: str = Field(description="processing / done / error")
     collection: str
+    kind: str = Field(default="upload", description="upload / rebuild_doc / rebuild_collection")
+    doc_id: str = Field(default="", description="单文档重建时的文档标识")
+    executor: str = Field(default="inline", description="inline（进程内）/ celery（worker）")
     department: str
     files: int = Field(default=0, description="受理文件数")
     chunks: int = Field(default=0, description="已入库分块数")
@@ -116,10 +130,14 @@ class DocumentTask(BaseModel):
 
 
 class StoredFileInfo(BaseModel):
-    """知识库目录里的一份文档"""
+    """知识库目录里的一份文档（磁盘为源真，入库信息来自 kb_document）"""
     path: str = Field(description="相对 data 目录的路径")
+    doc_id: str = Field(default="", description="文件名去后缀")
+    department: str = Field(default="", description="所在目录（科室/主题）")
     size: int = Field(description="字节数")
     modified: str = Field(description="最后修改时间")
+    chunks: int = Field(default=0, description="已入库分块数（未入库为 0）")
+    indexed: bool = Field(default=False, description="是否已入库（kb_document 有记录）")
 
 
 class DocumentListResponse(BaseModel):
@@ -137,3 +155,114 @@ class DeleteDocumentResponse(BaseModel):
     deleted_files: int = Field(description="已删除的落盘文件数")
     errors: List[str] = Field(default_factory=list, description="文件删除失败明细（向量已删但文件删不掉时如实上报）")
 
+
+
+# ---- 会话复盘（管理后台） ----
+
+
+class SessionSummary(BaseModel):
+    session_id: str
+    title: str = ""
+    turn_count: int = 0
+    last_outcome: str = ""
+    created_at: Optional[str] = None
+    last_active_at: Optional[str] = None
+
+
+class SessionListResponse(BaseModel):
+    total: int
+    items: List[SessionSummary] = Field(default_factory=list)
+
+
+class FeedbackItem(BaseModel):
+    """一条回答上的用户反馈"""
+    id: int
+    message_id: int
+    session_id: str
+    rating: int = Field(description="1=有用 / -1=没用")
+    reason_tags: List[str] = Field(default_factory=list)
+    comment: str = ""
+    created_at: Optional[str] = None
+
+
+class SessionMessage(BaseModel):
+    """会话回放中的一条消息（含来源与反馈）"""
+    id: int
+    role: str
+    content: str
+    outcome: str = ""
+    judge_layer: str = ""
+    judge_scores: Optional[Dict] = None
+    latency_ms: float = 0
+    first_token_ms: float = 0
+    stream_mode: str = ""
+    retry_count: int = 0
+    classification: str = ""
+    created_at: Optional[str] = None
+    sources: List[SourceInfo] = Field(default_factory=list)
+    feedback: Optional[FeedbackItem] = None
+
+
+class SessionDetailResponse(SessionSummary):
+    summary: str = ""
+    messages: List[SessionMessage] = Field(default_factory=list)
+
+
+# ---- 用户反馈 ----
+
+
+class FeedbackRequest(BaseModel):
+    message_id: int = Field(..., description="回答的 message_id（来自 /chat 或 /chat/stream 的 final）")
+    rating: Literal[-1, 1] = Field(..., description="1=有用 / -1=没用")
+    reason_tags: List[str] = Field(
+        default_factory=list, description="负反馈原因标签，如 答非所问/引用不相关"
+    )
+    comment: str = Field(default="", max_length=1000)
+
+
+class ReasonCount(BaseModel):
+    tag: str
+    count: int
+
+
+class DayFeedback(BaseModel):
+    date: str
+    positive: int = 0
+    negative: int = 0
+
+
+class FeedbackStatsResponse(BaseModel):
+    days: int
+    total: int
+    positive: int
+    negative: int
+    positive_rate: float
+    top_reasons: List[ReasonCount] = Field(default_factory=list)
+    by_day: List[DayFeedback] = Field(default_factory=list)
+
+
+# ---- 切分预览 ----
+
+
+class PreviewChunk(BaseModel):
+    index: int
+    tokens: int
+    text: str
+
+
+class PreviewFile(BaseModel):
+    name: str
+    doc_id: str
+    department: str
+    chars: int
+    chunk_count: int
+    returned: int
+    truncated: bool
+    chunks: List[PreviewChunk] = Field(default_factory=list)
+
+
+class ChunkPreviewResponse(BaseModel):
+    collection: str
+    department: str
+    total_chunks: int
+    files: List[PreviewFile] = Field(default_factory=list)

@@ -16,12 +16,13 @@ from src.core.llm import get_llm
 class AnswerGenerator:
     """医疗问诊回答生成器 """
 
-    def generate(
+    def build_prompt(
         self,
         query: str,
         context_text: str,
         conversation_context: str = "",
-    ):
+    ) -> str:
+        """构造生成 Prompt（阻塞生成与流式生成共用，避免两份 prompt 漂移）。"""
         prompt_template = load_prompt_template("generation")
         if not prompt_template:
             prompt_template = (
@@ -43,6 +44,15 @@ class AnswerGenerator:
         prompt = prompt_template.replace("{query}", query)
         prompt = prompt.replace("{context_text}", context_text)
         prompt = prompt.replace("{conversation_context}", conversation_context or "无")
+        return prompt
+
+    def generate(
+        self,
+        query: str,
+        context_text: str,
+        conversation_context: str = "",
+    ):
+        prompt = self.build_prompt(query, context_text, conversation_context)
 
         start = time.perf_counter()
         answer = get_llm().complete("answer", prompt)
@@ -50,6 +60,20 @@ class AnswerGenerator:
 
         logger.info(f"回答生成完成: {len(answer)}字, {latency_ms:.0f}ms")
         return answer, latency_ms
+
+    def generate_stream(
+        self,
+        query: str,
+        context_text: str,
+        conversation_context: str = "",
+    ):
+        """逐片产出回答（同步迭代器）。
+
+        只负责"取流"，不做累计/校验——把 token 聚合成完整答案、
+        决定何时下发给前端，是工作流的职责（它才知道风险分级与校验结果）。
+        """
+        prompt = self.build_prompt(query, context_text, conversation_context)
+        yield from get_llm().stream("answer", prompt)
 
     def generate_degraded(self, query: str) -> str:
         prompt_template = load_prompt_template("degradation")

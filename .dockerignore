@@ -6,6 +6,10 @@ volumes/
 logs/
 milvus_lite/
 
+# 前端依赖与构建产物（由 Dockerfile 的 node 阶段自己安装/产出）
+frontend/node_modules/
+frontend/dist/
+
 # 环境与缓存
 .env
 .env.*

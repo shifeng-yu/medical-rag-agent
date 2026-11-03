@@ -15,7 +15,6 @@ import pytest
 from src.core.llm import (
     LLMService, QwenBackend, FakeLLM, TASKS, get_llm,
 )
-from src.core.llm import _llm_instance as _CACHED  # noqa: F401  仅确保模块已加载
 
 
 # ---------------- 任务参数表 ----------------

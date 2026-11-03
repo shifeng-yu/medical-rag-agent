@@ -163,7 +163,6 @@ class DualSourceRetriever:
             )
 
         latency_ms = (time.perf_counter() - start) * 1000
-        total = len(local_results) + len(pubmed_results)
         logger.info(
             f"检索完成: local={len(local_results)}, pubmed={len(pubmed_results)}, "
             f"总耗时={latency_ms:.0f}ms"

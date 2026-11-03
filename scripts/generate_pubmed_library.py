@@ -290,4 +290,4 @@ for cat in sorted(TEMPLATES.keys()):
 print(f"\n  Total: {total} articles")
 print(f"  File count: {total} (each file < 10KB, total ~{total * 5 // 1024}MB)")
 print(f"  Location: {root.resolve()}")
-print(f"\n  Upload: drag the entire folder into RAGFlow KB")
+print("\n  Upload: drag the entire folder into RAGFlow KB")

@@ -44,6 +44,13 @@ jobs:
           pip install milvus-lite==3.2.1
           pip install python-multipart==0.0.9
           pip install tiktoken==0.7.0 numpy==1.26.4
+          pip install "sqlalchemy==2.0.30" "pymysql==1.1.1" "redis==5.0.4" "celery==5.4.0"
+          pip install "psycopg2-binary==2.9.10"
+
+      - name: Lint (ruff)
+        run: |
+          pip install "ruff==0.8.4"
+          ruff check .
 
       - name: Run tests
         env:
@@ -59,3 +66,32 @@ jobs:
             echo "::error::DIAG:python=$(python -c 'import sys; print(sys.version.split()[0])' 2>&1) milvus_lite=$(python -c 'import milvus_lite; print("OK")' 2>&1) pymilvus=$(python -c 'from pymilvus import Collection; print("OK")' 2>&1) pydantic=$(python -c 'import pydantic; print(pydantic.__version__)' 2>&1)"
             exit $STATUS
           fi
+
+  # 前端单独一个 job：构建失败不该拖累后端测试的结论，但必须能看见
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Unit & interaction tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Check dist produced
+        working-directory: frontend
+        run: |
+          test -f dist/index.html
+          ls -lh dist/assets
