@@ -1,0 +1,17 @@
+name: Local Dev
+values:
+  - key: base_url
+    value: 'http://localhost:8000'
+    enabled: true
+  - key: session_id
+    value: ''
+    enabled: true
+  - key: task_id
+    value: ''
+    enabled: true
+  - key: doc_id
+    value: cardiology
+    enabled: true
+  - key: message_id
+    value: ''
+    enabled: true

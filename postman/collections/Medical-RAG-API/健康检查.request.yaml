@@ -1,0 +1,14 @@
+$kind: http-request
+order: 1000
+method: GET
+url: '{{base_url}}/api/v1/health'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("status 字段为 ok", function () {
+        pm.expect(pm.response.json().status).to.eql("ok");
+      });

@@ -1,0 +1,15 @@
+$kind: http-request
+name: 查看知识库文档列表
+order: 9000
+method: GET
+url: '{{base_url}}/api/v1/documents?collection=local_kb'
+queryParams:
+  - key: collection
+    value: local_kb
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });

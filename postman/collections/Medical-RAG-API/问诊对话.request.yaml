@@ -1,0 +1,30 @@
+$kind: http-request
+order: 2000
+method: POST
+url: '{{base_url}}/api/v1/chat'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "query": "我最近经常头痛，伴有恶心，是什么问题？",
+      "session_id": null
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回 answer 字段", function () {
+        var json = pm.response.json();
+        pm.expect(json.answer).to.be.a("string").and.not.empty;
+      });
+      pm.test("返回 session_id 字段", function () {
+        var json = pm.response.json();
+        pm.expect(json.session_id).to.be.a("string");
+        pm.environment.set("session_id", json.session_id);
+      });

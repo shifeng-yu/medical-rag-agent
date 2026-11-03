@@ -1,0 +1,14 @@
+$kind: http-request
+order: 5000
+method: GET
+url: '{{base_url}}/api/v1/stats'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回 total_requests 字段", function () {
+        pm.expect(pm.response.json()).to.have.property("total_requests");
+      });

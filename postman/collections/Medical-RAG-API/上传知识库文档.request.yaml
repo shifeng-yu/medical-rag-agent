@@ -1,0 +1,30 @@
+$kind: http-request
+name: 上传知识库文档
+order: 7000
+method: POST
+url: '{{base_url}}/api/v1/documents/upload'
+description: '同名文件重传为替换语义。若文件未自动带上，请在 Body 里重新选择 data/samples/local_kb/cardiology.md。'
+body:
+  type: formdata
+  content:
+    - key: files
+      type: file
+      src: data/samples/local_kb/cardiology.md
+    - key: department
+      type: text
+      value: 心内科
+    - key: collection
+      type: text
+      value: local_kb
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回 task_id", function () {
+        var json = pm.response.json();
+        pm.expect(json.task_id).to.be.a("string");
+        pm.environment.set("task_id", json.task_id);
+      });

@@ -1,0 +1,24 @@
+$kind: http-request
+name: 重建单文档
+order: 16000
+method: POST
+url: '{{base_url}}/api/v1/documents/{{doc_id}}/rebuild?department=心内科&collection=local_kb'
+description: '删旧向量 → 重新分块向量化，按 doc_id 幂等。返回任务快照，用「查询灌库任务」轮询终态。'
+queryParams:
+  - key: department
+    value: 心内科
+  - key: collection
+    value: local_kb
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回重建任务", function () {
+        var json = pm.response.json();
+        pm.expect(json.kind).to.eql("rebuild_doc");
+        pm.expect(json.task_id).to.be.a("string");
+        pm.environment.set("task_id", json.task_id);
+      });

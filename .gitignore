@@ -39,3 +39,6 @@ Thumbs.db
 
 # Node
 node_modules/
+
+# Postman 本地视图元数据（workspace id 与本机绑定，不进仓库）
+.postman/

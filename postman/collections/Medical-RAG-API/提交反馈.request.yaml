@@ -1,0 +1,30 @@
+$kind: http-request
+name: 提交反馈
+order: 11000
+method: POST
+url: '{{base_url}}/api/v1/feedback'
+description: '对某条回答点赞/点踩。message_id 由「流式问诊」用例写入环境变量；同一条回答重复提交为覆盖写。'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "message_id": "{{message_id}}",
+      "rating": -1,
+      "reason_tags": ["引用不相关"],
+      "comment": "来源与问题不匹配"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("反馈已记录", function () {
+        var json = pm.response.json();
+        pm.expect(json.rating).to.eql(-1);
+        pm.expect(json.message_id).to.be.a("number");
+      });

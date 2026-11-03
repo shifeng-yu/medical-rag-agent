@@ -1,0 +1,33 @@
+$kind: http-request
+name: 流式问诊（SSE）
+order: 2100
+method: POST
+url: '{{base_url}}/api/v1/chat/stream'
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Accept
+    value: text/event-stream
+body:
+  type: json
+  content: |-
+    {
+      "query": "最近总是失眠怎么办？",
+      "session_id": null
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回 SSE 事件流", function () {
+        pm.expect(pm.response.text()).to.include("event: meta");
+        pm.expect(pm.response.text()).to.include("event: final");
+      });
+      // 从 final 帧里取 message_id，供「提交反馈」用例使用
+      var matched = pm.response.text().match(/"message_id":\s*"?(\d+)"?/);
+      if (matched) {
+        pm.environment.set("message_id", matched[1]);
+      }

@@ -1,0 +1,22 @@
+$kind: http-request
+name: 会话列表
+order: 13000
+method: GET
+url: '{{base_url}}/api/v1/sessions?limit=20&offset=0'
+queryParams:
+  - key: limit
+    value: '20'
+  - key: offset
+    value: '0'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回会话数组", function () {
+        var json = pm.response.json();
+        pm.expect(json.items).to.be.an("array");
+        pm.expect(json.total).to.be.a("number");
+      });

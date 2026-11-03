@@ -1,0 +1,21 @@
+$kind: http-request
+name: 反馈看板
+order: 12000
+method: GET
+url: '{{base_url}}/api/v1/feedback/stats?days=7'
+queryParams:
+  - key: days
+    value: '7'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回统计字段", function () {
+        var json = pm.response.json();
+        pm.expect(json.total).to.be.a("number");
+        pm.expect(json.positive_rate).to.be.a("number");
+        pm.expect(json.top_reasons).to.be.an("array");
+      });

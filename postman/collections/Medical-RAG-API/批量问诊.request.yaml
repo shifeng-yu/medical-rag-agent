@@ -1,0 +1,26 @@
+$kind: http-request
+order: 4000
+method: POST
+url: '{{base_url}}/api/v1/chat/batch'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "queries": [
+        {"query": "高血压有哪些症状？", "session_id": null},
+        {"query": "糖尿病如何控制血糖？", "session_id": null}
+      ]
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回数组", function () {
+        pm.expect(pm.response.json()).to.be.an("array");
+      });

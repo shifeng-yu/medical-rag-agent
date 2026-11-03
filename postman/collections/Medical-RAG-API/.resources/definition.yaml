@@ -1,0 +1,3 @@
+$kind: collection
+name: Medical-RAG API
+description: 'Medical-RAG 全科医疗问诊智能助手 API 集合。包含问诊对话、知识库管理、健康检查等全部接口。服务默认运行在 http://localhost:8000，使用 Local Dev 环境变量。'

@@ -1,0 +1,11 @@
+$kind: http-request
+order: 6000
+method: DELETE
+url: '{{base_url}}/api/v1/session/{{session_id}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });

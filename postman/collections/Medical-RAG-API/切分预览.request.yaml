@@ -1,0 +1,33 @@
+$kind: http-request
+name: 切分预览（dry-run）
+order: 15000
+method: POST
+url: '{{base_url}}/api/v1/documents/preview'
+description: '不落库、不入库：用真实分块器切一遍，返回块数与正文。若文件未自动带上，请在 Body 里重新选择 data/samples/local_kb/cardiology.md。'
+body:
+  type: formdata
+  content:
+    - key: files
+      type: file
+      src: data/samples/local_kb/cardiology.md
+    - key: department
+      type: text
+      value: 心内科
+    - key: collection
+      type: text
+      value: local_kb
+    - key: max_chunks
+      type: text
+      value: '20'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回分块预览", function () {
+        var json = pm.response.json();
+        pm.expect(json.total_chunks).to.be.a("number");
+        pm.expect(json.files).to.be.an("array");
+      });

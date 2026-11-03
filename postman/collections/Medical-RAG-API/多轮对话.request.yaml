@@ -1,0 +1,22 @@
+$kind: http-request
+name: '多轮对话（带 session_id）'
+order: 3000
+method: POST
+url: '{{base_url}}/api/v1/chat'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "query": "那需要注意什么饮食和生活习惯？",
+      "session_id": "{{session_id}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });

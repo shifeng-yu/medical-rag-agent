@@ -1,0 +1,17 @@
+$kind: http-request
+name: 会话回放
+order: 14000
+method: GET
+url: '{{base_url}}/api/v1/sessions/{{session_id}}'
+description: '按 session_id 取完整对话：消息、命中来源、反馈与 Judge 分数。'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回消息列表", function () {
+        var json = pm.response.json();
+        pm.expect(json.messages).to.be.an("array");
+      });

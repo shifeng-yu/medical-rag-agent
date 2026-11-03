@@ -1,0 +1,15 @@
+$kind: http-request
+name: 查询灌库任务状态
+order: 8000
+method: GET
+url: '{{base_url}}/api/v1/documents/tasks/{{task_id}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("状态码 200", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("返回 status 字段", function () {
+        pm.expect(pm.response.json()).to.have.property("status");
+      });
